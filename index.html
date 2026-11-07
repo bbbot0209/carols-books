@@ -36,18 +36,25 @@
   .note a{color:var(--acc2);word-break:break-all}
   .empty{text-align:center;color:var(--mute);padding:40px 10px}
   .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;border:0;background:var(--acc);color:#fff;font-size:34px;line-height:60px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
-  dialog{border:0;border-radius:18px;padding:0;width:min(560px,94vw);max-height:90vh;background:var(--card);color:var(--ink)}
+  dialog{border:0;padding:0;margin:0;width:100%;max-width:100%;height:100%;max-height:100%;background:var(--card);color:var(--ink);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
   dialog::backdrop{background:rgba(0,0,0,.35)}
-  form{padding:16px}
-  form h2{margin:0 0 12px;font:600 21px Georgia,serif}
+  @media (min-width:640px){dialog{margin:auto;width:560px;height:auto;max-height:90vh;border-radius:18px}}
+  html.modal,html.modal body{overflow:hidden}
+  .bar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;background:var(--card);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top)) 8px 8px}
+  .bar h2{flex:1;margin:0;text-align:center;font:600 18px Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar button{flex:0 0 76px;padding:9px 6px;border:0;border-radius:10px;background:none;font-size:17px;color:var(--acc2)}
+  .bar .pri{background:var(--acc);color:#fff;font-weight:600}
+  .bar button:focus{outline:none}
+  .fb{padding:4px 16px calc(24px + env(safe-area-inset-bottom))}
   label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
-  form input,form select,form textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:#fff;color:var(--ink);font-family:inherit}
-  textarea{min-height:70px}
+  form input,form select,form textarea{display:block;width:100%;max-width:100%;min-width:0;-webkit-appearance:none;appearance:none;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:#fff;color:var(--ink);font-family:inherit}
+  form input[type=month]{min-height:44px;text-align:left}
+  textarea{min-height:90px}
   .row{display:flex;gap:10px}.row>div{flex:1;min-width:0}
   .seg{display:flex;gap:6px}.seg button{flex:1;padding:9px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:15px;color:var(--ink)}
   .seg button.on{background:var(--ink);color:#fff}
   .rate button{font-size:28px;background:none;border:0;color:#d8cbb4;padding:0 3px}.rate button.on{color:#c08a1e}
-  .btns{display:flex;gap:8px;margin-top:16px}
+  .btns{display:flex;gap:8px;margin-top:20px}
   .btns button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:16px;color:var(--ink)}
   .btns .pri{background:var(--acc);color:#fff;border-color:var(--acc)}
   .btns .del{color:#b3261e;flex:0 0 auto}
@@ -76,7 +83,7 @@
 </div>
 <button class="fab" id="add" aria-label="Add">+</button>
 
-<dialog id="dlg"><form id="f" method="dialog"></form></dialog>
+<dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 
 <script>
 const KEY='carol-books-v1';
@@ -124,17 +131,21 @@ function render(){
   L.querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName!=='A')edit(el.dataset.id)});
 }
 
+const bar=t=>`<div class="bar"><button type="button" class="cx">Cancel</button><h2>${esc(t)}</h2><button class="pri">Save</button></div>`;
+const close=()=>$('#dlg').close();
+$('#dlg').addEventListener('close',()=>document.documentElement.classList.remove('modal'));
+$('#dlg').addEventListener('click',e=>{const r=$('#dlg').getBoundingClientRect();if(e.target===$('#dlg')&&(e.clientY<r.top||e.clientY>r.bottom||e.clientX<r.left||e.clientX>r.right))close()});
 function edit(eid){
   const f=$('#f'),list=db[tab],it=eid?list.find(x=>x.id===eid):{};
   if(tab==='groups'){
-    f.innerHTML=`<h2>${eid?'Edit':'New'} book group</h2>
+    f.innerHTML=`${bar(`${eid?'Edit':'New'} group`)}<div class="fb">
       <label>Name</label><input name="name" required value="${esc(it.name)}">
       <label>Members</label><input name="members" value="${esc(it.members)}" placeholder="Sue, Linda, Mark…">
       <label>When it meets</label><input name="meets" value="${esc(it.meets)}" placeholder="2nd Tuesday">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
   }else{
     const read=tab==='read',gl=groupNames();
-    f.innerHTML=`<h2>${eid?'Edit book':read?'Book I read':'Book to read'}</h2>
+    f.innerHTML=`${bar(eid?'Edit book':read?'Book I read':'Book to read')}<div class="fb">
       <label>Title</label><input name="title" required value="${esc(it.title)}">
       <label>Author</label><input name="author" value="${esc(it.author)}">
       <label>Category</label><div class="seg" data-f="cat">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${it.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
@@ -147,17 +158,18 @@ function edit(eid){
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
   }
   const st={cat:it.cat||'',rating:it.rating||0};
-  f.innerHTML+=`<div class="btns">${eid?'<button type="button" class="del">Delete</button>':''}${eid&&tab==='want'?'<button type="button" class="mv">Mark read</button>':''}<button type="button" class="cx">Cancel</button><button class="pri">Save</button></div>`;
+  f.innerHTML+=(eid?`<div class="btns">${tab==='want'?'<button type="button" class="mv">Mark read</button>':''}<button type="button" class="del">Delete</button></div>`:'')+'</div>';
+  f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
   f.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{st.cat=b.classList.contains('on')?'':b.dataset.v;f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))});
   f.querySelectorAll('.rate button').forEach(b=>b.onclick=()=>{const n=+b.dataset.n;st.rating=st.rating===n?0:n;f.querySelectorAll('.rate button').forEach(x=>x.classList.toggle('on',+x.dataset.n<=st.rating))});
   const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups'){o.cat=st.cat;if(tab==='read')o.rating=st.rating}return o};
-  f.querySelector('.cx').onclick=()=>$('#dlg').close();
-  const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();$('#dlg').close();render()}};
-  const mv=f.querySelector('.mv');if(mv)mv.onclick=()=>{const o=collect();db.want=db.want.filter(x=>x.id!==eid);o.date=new Date().toISOString().slice(0,7);db.read.push(o);save();$('#dlg').close();document.querySelector('[data-tab=read]').click();edit(o.id)};
+  f.querySelector('.cx').onclick=close;
+  const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();close();render()}};
+  const mv=f.querySelector('.mv');if(mv)mv.onclick=()=>{const o=collect();db.want=db.want.filter(x=>x.id!==eid);o.date=new Date().toISOString().slice(0,7);db.read.push(o);save();close();document.querySelector('[data-tab=read]').click();edit(o.id)};
   f.onsubmit=e=>{e.preventDefault();if(!f.reportValidity())return;const o=collect();
     if(eid)Object.assign(it,o);else list.push({...o,id:id(),added:Date.now()});
-    save();$('#dlg').close();render()};
-  $('#dlg').showModal();
+    save();close();render()};
+  document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;f.querySelector('.cx').focus({preventScroll:true});
 }
 
 $('#exp').onclick=async()=>{
