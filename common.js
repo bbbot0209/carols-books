@@ -46,6 +46,17 @@ const OL='https://openlibrary.org/search.json?limit=8&fields=key,title,author_na
 // Short titles ("Land") drown in OL relevance ranking, so also try "title author" splits of the typed words
 // (title=Land&author=Maggie) and float exact-title matches to the top. Apostrophes break OL tokenizing.
 const olNorm=t=>(t||'').toLowerCase().replace(/[\u2018\u2019'`]/g,' ').replace(/[^\p{L}\p{N} ]+/gu,' ').replace(/\s+/g,' ').trim();
+// Apple Books store search ranks titles like a store/Google does ("Land" → Maggie O'Farrell first); keyless, CORS-open.
+const apFind=(q,signal)=>fetch('https://itunes.apple.com/search?media=ebook&entity=ebook&limit=8&term='+encodeURIComponent(q),{signal}).then(r=>r.json())
+  .then(j=>(j.results||[]).map(x=>({ap:1,title:x.trackName.replace(/:? A Novel$/i,''),author_name:[x.artistName],first_publish_year:(x.releaseDate||'').slice(0,4),art:x.artworkUrl60||'',genres:x.genres||[]}))).catch(()=>[]);
+// Apple results first, then Open Library, deduped on title+first author.
+async function bookFind(q,signal){const [a,o]=await Promise.all([apFind(q,signal),olFind(q,signal).catch(()=>[])]);if(signal.aborted)throw 0;
+  const k=x=>olNorm(x.title)+'|'+olNorm((x.author_name||[])[0]).split(' ').pop(),seen=new Set();
+  return [...a,...o].filter(x=>!seen.has(k(x))&&seen.add(k(x)))}
+// OL work for an Apple pick (pages/cover/description live there).
+const olMatch=async(title,author)=>{try{const t=olNorm(title),last=olNorm(author).split(' ').pop()||'';
+  const d=(await (await fetch(OL.replace(/&q=$/,'')+'&title='+encodeURIComponent(t)+'&author='+encodeURIComponent(last))).json()).docs||[];
+  return d.find(x=>olNorm(x.title)===t)||d[0]||null}catch{return null}};
 async function olFind(q,signal){
   const n=olNorm(q),w=n.split(' '),urls=[OL+encodeURIComponent(n)],base=OL.replace(/&q=$/,'');
   for(const k of new Set([1,w.length-1]))if(k>0&&k<w.length)urls.push(base+'&title='+encodeURIComponent(w.slice(0,k).join(' '))+'&author='+encodeURIComponent(w.slice(k).join(' ')));
@@ -61,11 +72,11 @@ function bookAC(inp,pick){
   let seq=0,t=0,docs=[];
   const hide=()=>{box.hidden=true;box.innerHTML='';docs=[]};
   const show=d=>{docs=d.filter(x=>x.title).slice(0,6);if(!docs.length||document.activeElement!==inp)return hide();
-    box.innerHTML=docs.map((x,i)=>`<div data-i="${i}">${x.cover_i?`<img src="https://covers.openlibrary.org/b/id/${x.cover_i}-S.jpg" alt="">`:'<i></i>'}<p><b>${esc(x.title)}</b><span>${esc([(x.author_name||[])[0],x.first_publish_year].filter(Boolean).join(' · '))}</span></p></div>`).join('')+'<div class="hint">Not listed? Add the author, e.g. “Land Maggie”</div>';box.hidden=false};
+    box.innerHTML=docs.map((x,i)=>`<div data-i="${i}">${x.cover_i?`<img src="https://covers.openlibrary.org/b/id/${x.cover_i}-S.jpg" alt="">`:/^https:\/\/[\w.-]+\.mzstatic\.com\//.test(x.art)?`<img src="${esc(x.art)}" alt="">`:'<i></i>'}<p><b>${esc(x.title)}</b><span>${esc([(x.author_name||[])[0],x.first_publish_year].filter(Boolean).join(' · '))}</span></p></div>`).join('')+'<div class="hint">Not listed? Add the author, e.g. “Land O’Farrell”</div>';box.hidden=false};
   const run=(min,wait)=>{clearTimeout(t);const q=inp.value.trim().toLowerCase(),s=++seq;if(q.length<min)return hide();
     if(cache.has(q))return show(cache.get(q));
     t=setTimeout(async()=>{try{const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),8000);
-      const d=await olFind(q,ctl.signal).finally(()=>clearTimeout(tm));
+      const d=await bookFind(q,ctl.signal).finally(()=>clearTimeout(tm));
       cache.set(q,d);if(s===seq)show(d)}catch{if(s===seq)hide()}},wait)};
   inp.addEventListener('input',()=>run(3,300));
   // Return searches right away (any length, keeps the keyboard up) instead of the form-wide "Return = done/blur".
@@ -74,8 +85,10 @@ function bookAC(inp,pick){
   inp.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==inp){seq++;hide()}},250));
   inp.addEventListener('keydown',e=>{if(e.key==='Escape'){seq++;hide()}});
   box.addEventListener('mousedown',e=>e.preventDefault());
-  box.addEventListener('click',e=>{const el=e.target.closest('[data-i]'),x=el&&docs[+el.dataset.i];if(!x)return;seq++;hide();
-    pick({key:/^\/works\/OL\w+$/.test(x.key||'')?x.key:'',title:x.title,author:(x.author_name||[])[0]||'',pages:x.number_of_pages_median||'',year:x.first_publish_year||'',cover:x.cover_i?`https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg`:'',...guessGenre(x.subject)});inp.blur()});
+  box.addEventListener('click',async e=>{const el=e.target.closest('[data-i]');let x=el&&docs[+el.dataset.i];if(!x)return;seq++;hide();inp.blur();
+    if(x.ap){const a=x,m=await olMatch(a.title,a.author_name[0]);const g=guessGenre(a.genres);
+      x={...(m||{}),title:a.title,author_name:a.author_name,first_publish_year:a.first_publish_year||(m&&m.first_publish_year),subject:g.cat?a.genres:(m&&m.subject)||a.genres}}
+    pick({key:/^\/works\/OL\w+$/.test(x.key||'')?x.key:'',title:x.title,author:(x.author_name||[])[0]||'',pages:x.number_of_pages_median||'',year:x.first_publish_year||'',cover:x.cover_i?`https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg`:'',...guessGenre(x.subject)})});
 }
 // Best edition of a work for pages/publisher/year: prefer English, then editions that have those fields.
 const olEdition=async k=>{if(!k)return{};try{const es=(await (await fetch('https://openlibrary.org'+k+'/editions.json?limit=50')).json()).entries||[];
@@ -106,7 +119,7 @@ function fillPicked(f,b,onCat){const fv=n=>f.querySelector(`[name=${n}]`),set=(n
   olEdition(b.key).then(e=>{set('pages',e.pages);set('year',e.year);
     return ap}).then(x=>{set('year',x.year);if(!b.cat&&onCat&&x.genres){const g=guessGenre(x.genres);if(g.cat)onCat(g)}})}
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261107e';
+const APPV='20261107f';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});
