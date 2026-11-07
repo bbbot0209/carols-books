@@ -215,7 +215,7 @@ $('#impf').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{c
 
 // ---------- shared book groups ----------
 const gByName=n=>db.groups.find(g=>g.name&&g.name===n);
-const toShared=b=>({title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',by:'Carol',review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:b.reviewText,notes:b.notes});
+const toShared=b=>({title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',by:'Carol',rec:b.by||'',review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:b.reviewText,notes:b.notes});
 // Push one of Carol's books to its shared group (create or update). Never throws.
 async function pushBook(b,quiet){
   const g=b&&b.group&&gByName(b.group);if(!g||!g.token)return true;
@@ -266,12 +266,12 @@ function groupView(g){
   const draw=books=>{books.sort((a,b)=>b.added-a.added);
     st.textContent=`${books.length} shared book${books.length===1?'':'s'}`;
     gl.innerHTML=books.length?books.map(b=>`<div class="card"><div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
-      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.by?`<span class="pill">from ${esc(b.by)}</span>`:''}</div>
+      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.rec?`<span class="pill">rec. by ${esc(b.rec)}</span>`:''}${b.by?`<span class="pill">added by ${esc(b.by)}</span>`:''}</div>
       ${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
       <div class="gact">${have(b)?'<button type="button" class="sbtn" disabled>✓ In your lists</button>':`<button type="button" class="sbtn pri" data-sid="${esc(b.id)}">Add to Want to read</button>`}</div></div>`).join('')
       :`<div class="empty">No shared books yet.<br>Books you save with this group, and ones friends add from the link, show up here.</div>`;
     gl.querySelectorAll('[data-sid]').forEach(btn=>btn.onclick=()=>{const b=books.find(x=>x.id===btn.dataset.sid);
-      db.want.push({title:b.title,author:b.author,cat:b.cat,genre:b.genre,pages:b.pages,by:b.by,group:g.name,review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
+      db.want.push({title:b.title,author:b.author,cat:b.cat,genre:b.genre,pages:b.pages,by:b.rec||b.by,group:g.name,review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
       save();btn.disabled=true;btn.classList.remove('pri');btn.textContent='✓ Added to Want to read'})};
   api('GET',`/groups/${g.token}`).then(d=>draw(d.books)).catch(e=>{st.textContent=e.status===404?'This shared list no longer exists.':'Couldn’t load the shared list — check your connection.'});
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;

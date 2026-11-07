@@ -90,11 +90,11 @@ async function load(){
 function render(){
   if(!books)return;
   const q=$('#q').value.toLowerCase(),M=mine();
-  const items=books.filter(b=>!q||[b.title,b.author,b.by,b.genre,b.notes,b.reviewText].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.added-a.added);
+  const items=books.filter(b=>!q||[b.title,b.author,b.by,b.rec,b.genre,b.notes,b.reviewText].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.added-a.added);
   $('#list').innerHTML=`<div class="count">${items.length}${items.length!==books.length?' of '+books.length:''} book${books.length===1?'':'s'}</div>`+(items.length?items.map(b=>`
     <div class="card" data-id="${esc(b.id)}">${M.includes(b.id)?'<span class="mine">Edit</span>':''}
       <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
-      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.by?`<span class="pill">from ${esc(b.by)}</span>`:''}</div>
+      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.rec?`<span class="pill">rec. by ${esc(b.rec)}</span>`:''}${b.by?`<span class="pill">added by ${esc(b.by)}</span>`:''}</div>
       ${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
     </div>`).join(''):`<div class="empty">${books.length?'Nothing matches.':'No books yet.<br>Tap + to share one with the group.'}</div>`);
   $('#list').querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName!=='A'&&M.includes(el.dataset.id))edit(el.dataset.id)});
@@ -107,9 +107,10 @@ function edit(eid){
   f.innerHTML=`<div class="bar"><button type="button" class="cx">Cancel</button><h2>${eid?'Edit book':'Share a book'}</h2><button class="pri">Save</button></div><div class="fb">
     <label>Title</label><input name="title" required maxlength="200" value="${esc(it.title)}">
     <div class="row"><div style="flex:3"><label>Author</label><input name="author" maxlength="200" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
+    <label>Recommended by</label><input name="rec" maxlength="60" value="${esc(it.rec)}">
     <label>Category</label><div class="seg">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${st.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
     <label>Genre</label><div class="chips"></div><input name="genre" maxlength="60" value="${esc(it.genre)}" placeholder="Or type your own">
-    <label>Your name</label><input name="by" required maxlength="60" value="${esc(eid?it.by:me.name)}">
+    <label>Added by (your name)</label><input name="by" required maxlength="60" value="${esc(eid?it.by:me.name)}">
     <label>Review</label><textarea name="reviewText" maxlength="1000" placeholder="Where it’s from / what it said — e.g. NYT: “a quiet masterpiece”">${esc(it.reviewText)}</textarea>
     <label>Review link</label><input name="review" type="url" inputmode="url" maxlength="500" value="${esc(it.review)}" placeholder="https://…">
     <label>Notes</label><textarea name="notes" maxlength="2000">${esc(it.notes)}</textarea>
