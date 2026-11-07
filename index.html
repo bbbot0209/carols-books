@@ -53,6 +53,8 @@
   .row{display:flex;gap:10px}.row>div{flex:1;min-width:0}
   .seg{display:flex;gap:6px}.seg button{flex:1;padding:9px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:15px;color:var(--ink)}
   .seg button.on{background:var(--ink);color:#fff}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.chips button{padding:7px 11px;border:1px solid var(--line);border-radius:99px;background:#fff;font-size:14px;color:var(--ink)}
+  .chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .rate button{font-size:28px;background:none;border:0;color:#d8cbb4;padding:0 3px}.rate button.on{color:#c08a1e}
   .btns{display:flex;gap:8px;margin-top:20px}
   .btns button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:16px;color:var(--ink)}
@@ -73,7 +75,7 @@
   </div>
   <div class="tools" id="tools">
     <input id="q" type="search" placeholder="Search title, author, person…">
-    <select id="cat"><option value="">All</option><option value="Fiction">Fiction</option><option value="Non-fiction">Non-fiction</option></select>
+    <select id="cat"></select>
   </div>
 </header>
 <main id="list"></main>
@@ -95,6 +97,10 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const link=s=>esc(s).replace(/(https?:\/\/[^\s]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
 const id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const fmtDate=d=>{if(!d)return'';const[y,m]=d.split('-');return m?new Date(y,m-1).toLocaleString(undefined,{month:'short',year:'numeric'}):y};
+const GENRES={'Fiction':['Literary fiction','Mystery','Thriller & suspense','Romance','Historical fiction','Fantasy','Science fiction','Horror','Short stories','Classics','Young adult','Graphic novel','Poetry'],
+  'Non-fiction':['Biography & memoir','History','Science & nature','Politics & current events','Business & economics','Self-help','Health & wellness','Religion & spirituality','Philosophy','Psychology','True crime','Travel','Food & cooking','Art & music','Essays']};
+const catOf=g=>Object.keys(GENRES).find(c=>GENRES[c].includes(g))||'';
+$('#cat').innerHTML='<option value="">All</option>'+Object.entries(GENRES).map(([c,gs])=>`<optgroup label="${c}"><option value="${c}">All ${c.toLowerCase()}</option>${gs.map(g=>`<option>${g}</option>`).join('')}</optgroup>`).join('');
 const groupNames=()=>db.groups.map(g=>g.name).filter(Boolean);
 
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));$('#tools').style.display=tab==='groups'?'none':'flex';render()});
@@ -110,7 +116,7 @@ function render(){
       :`<div class="empty">No book groups yet.<br>Tap + to add one.</div>`;
   }else{
     const q=$('#q').value.toLowerCase(),c=$('#cat').value;
-    let items=db[tab].filter(b=>(!c||b.cat===c)&&(!q||[b.title,b.author,b.by,b.group,b.genre,b.notes].join(' ').toLowerCase().includes(q)));
+    let items=db[tab].filter(b=>(!c||b.cat===c||b.genre===c)&&(!q||[b.title,b.author,b.by,b.group,b.genre,b.notes].join(' ').toLowerCase().includes(q)));
     items.sort(tab==='read'?(a,b)=>(b.date||'').localeCompare(a.date||''):(a,b)=>(b.added||0)-(a.added||0));
     const n=db[tab].length;
     L.innerHTML=`<div class="count">${items.length}${items.length!==n?' of '+n:''} book${n===1?'':'s'}</div>`+(items.length?items.map(b=>`
@@ -149,7 +155,7 @@ function edit(eid){
       <label>Title</label><input name="title" required value="${esc(it.title)}">
       <label>Author</label><input name="author" value="${esc(it.author)}">
       <label>Category</label><div class="seg" data-f="cat">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${it.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
-      <label>Genre</label><input name="genre" value="${esc(it.genre)}" placeholder="Mystery, memoir, history…">
+      <label>Genre</label><div class="chips"></div><input name="genre" value="${esc(it.genre)}" placeholder="Or type your own">
       ${read?`<label>When I read it</label><input name="date" type="month" value="${esc(it.date)}">
       <label>My rating</label><div class="rate">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" class="${(it.rating||0)>=n?'on':''}">★</button>`).join('')}</div>`:''}
       <div class="row"><div><label>Recommended by</label><input name="by" value="${esc(it.by)}"></div>
@@ -162,6 +168,11 @@ function edit(eid){
   f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
   f.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{st.cat=b.classList.contains('on')?'':b.dataset.v;f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))});
   f.querySelectorAll('.rate button').forEach(b=>b.onclick=()=>{const n=+b.dataset.n;st.rating=st.rating===n?0:n;f.querySelectorAll('.rate button').forEach(x=>x.classList.toggle('on',+x.dataset.n<=st.rating))});
+  const chips=f.querySelector('.chips'),gi=f.querySelector('[name=genre]');
+  const drawChips=()=>{if(!chips)return;const gs=st.cat?GENRES[st.cat]:[...GENRES['Fiction'],...GENRES['Non-fiction']];
+    chips.innerHTML=gs.map(g=>`<button type="button" class="${gi.value===g?'on':''}">${g}</button>`).join('');
+    chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{const g=b.textContent;gi.value=gi.value===g?'':g;if(gi.value&&catOf(g)!==st.cat){st.cat=catOf(g);f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))}drawChips()})};
+  if(chips){gi.oninput=drawChips;f.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',drawChips));drawChips()}
   const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups'){o.cat=st.cat;if(tab==='read')o.rating=st.rating}return o};
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();close();render()}};
