@@ -144,7 +144,7 @@ function render(){
         <div class="meta">
           ${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${b.cat}</span>`:''}
           ${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}
-          ${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}
+          ${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}
           ${tab==='read'&&b.date?`<span class="pill">${fmtDate(b.date)}</span>`:''}
           ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
           ${recPill({rec:b.by,dateRec:b.dateRec})}
@@ -178,6 +178,7 @@ function edit(eid){
     f.innerHTML=`${bar(eid?'Edit book':read?'Book I read':'Book to read')}<div class="fb">
       <label>Title</label><input name="title" required value="${esc(it.title)}"><input type="hidden" name="cover" value="${esc(it.cover)}">
       <div class="row"><div style="flex:3"><label>Author</label><input name="author" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
+      <div class="row"><div><label>Year published</label><input name="year" inputmode="numeric" maxlength="4" value="${esc(it.year)}"></div><div style="flex:3"><label>Publisher</label><input name="publisher" value="${esc(it.publisher)}"></div></div>
       <div class="row"><div style="flex:3"><label>Recommended by</label><input name="by" value="${esc(it.by)}"></div><div style="flex:2"><label>Date recommended</label><input name="dateRec" type="date" value="${esc(it.dateRec??(!eid&&!read?today():''))}"></div></div>
       <label>Category</label><div class="seg" data-f="cat">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${it.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
       <label>Genre</label><div class="chips"></div><input name="genre" value="${esc(it.genre)}" placeholder="Or type your own">
@@ -200,7 +201,7 @@ function edit(eid){
     chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{const g=b.textContent;gi.value=gi.value===g?'':g;if(gi.value&&catOf(g)!==st.cat){st.cat=catOf(g);f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))}drawChips()})};
   if(chips){gi.oninput=drawChips;f.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',drawChips));drawChips()
     const fv=n=>f.querySelector(`[name=${n}]`);
-    bookAC(fv('title'),b=>{fv('title').value=b.title;fv('author').value=b.author;if(!fv('pages').value&&b.pages)fv('pages').value=b.pages;fv('cover').value=b.cover;if(!fv('about').value)olAbout(b.key).then(a=>{if(a&&!fv('about').value)fv('about').value=a});
+    bookAC(fv('title'),b=>{fillPicked(f,b);
       if(!st.cat&&b.cat)st.cat=b.cat;if(!gi.value&&b.genre&&catOf(b.genre)===st.cat)gi.value=b.genre;
       f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat));drawChips()})}
   const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups'){o.cat=st.cat;if(tab==='read')o.rating=st.rating}return o};
@@ -242,7 +243,7 @@ $('#grf').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!
   const seen={read:new Set(db.read.map(key)),want:new Set(db.want.map(key))},add={read:[],want:[]};let dup=0;
   rows.forEach((r,i)=>{const title=g(r,'Title');if(!title)return;
     const L=g(r,'Exclusive Shelf')==='read'?'read':'want',d=g(r,'Date Read').replace(/\//g,'-'),pg=parseInt(g(r,'Number of Pages')),rt=parseInt(g(r,'My Rating'))||0,da=Date.parse(g(r,'Date Added').replace(/\//g,'-'));
-    const b={title,author:g(r,'Author').replace(/\s+/g,' '),pages:pg>0&&pg<=10000?pg:'',by:'',...guessGenre(g(r,'Bookshelves').split(/,\s*/)),group:'',reviewText:grText(g(r,'My Review')),review:'',notes:'',id:id()+i.toString(36),added:isNaN(da)?Date.now()-i:da};
+    const b={title,author:g(r,'Author').replace(/\s+/g,' '),pages:pg>0&&pg<=10000?pg:'',year:(g(r,'Original Publication Year')||g(r,'Year Published')).replace(/\D/g,'').slice(0,4),publisher:g(r,'Publisher'),by:'',...guessGenre(g(r,'Bookshelves').split(/,\s*/)),group:'',reviewText:grText(g(r,'My Review')),review:'',notes:'',id:id()+i.toString(36),added:isNaN(da)?Date.now()-i:da};
     if(L==='read'){b.date=/^\d{4}-\d{2}-\d{2}$/.test(d)?d:'';b.rating=rt>=1&&rt<=5?rt:0}
     if(seen[L].has(key(b)))return dup++;seen[L].add(key(b));add[L].push(b)});
   const n=add.read.length,m=add.want.length;
@@ -252,7 +253,7 @@ $('#grf').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!
 
 // ---------- shared book groups ----------
 const gByName=n=>db.groups.find(g=>g.name&&g.name===n);
-const toShared=b=>({title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',cover:b.cover||'',by:'Carol',rec:b.by||'',dateRec:b.dateRec||'',about:(b.about||'').slice(0,2000),review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:(b.reviewText||'').slice(0,1000),notes:(b.notes||'').slice(0,2000)});
+const toShared=b=>({title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',year:b.year||'',publisher:b.publisher||'',cover:b.cover||'',by:'Carol',rec:b.by||'',dateRec:b.dateRec||'',about:(b.about||'').slice(0,2000),review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:(b.reviewText||'').slice(0,1000),notes:(b.notes||'').slice(0,2000)});
 // Push one of Carol's books to its shared group (create or update). Never throws.
 async function pushBook(b,quiet){
   const g=b&&b.group&&gByName(b.group);if(!g||!g.token)return true;
@@ -303,12 +304,12 @@ function groupView(g){
   const draw=books=>{books.sort((a,b)=>b.added-a.added);
     st.textContent=`${books.length} shared book${books.length===1?'':'s'}`;
     gl.innerHTML=books.length?books.map(b=>`<div class="card${coverImg(b)?' hc':''}">${coverImg(b)}<div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
-      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${recPill(b)}${b.by?`<span class="pill">added by ${esc(b.by)}</span>`:''}</div>
+      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}${recPill(b)}${b.by?`<span class="pill">added by ${esc(b.by)}</span>`:''}</div>
       ${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
       <div class="gact">${have(b)?'<button type="button" class="sbtn" disabled>✓ In your lists</button>':`<button type="button" class="sbtn pri" data-sid="${esc(b.id)}">Add to Want to read</button>`}</div></div>`).join('')
       :`<div class="empty">No shared books yet.<br>Books you save with this group, and ones friends add from the link, show up here.</div>`;
     gl.querySelectorAll('[data-sid]').forEach(btn=>btn.onclick=()=>{const b=books.find(x=>x.id===btn.dataset.sid);
-      db.want.push({title:b.title,author:b.author,cover:b.cover,cat:b.cat,genre:b.genre,pages:b.pages,by:b.rec||b.by,dateRec:b.dateRec||'',about:b.about||'',group:g.name,review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
+      db.want.push({title:b.title,author:b.author,cover:b.cover,cat:b.cat,genre:b.genre,pages:b.pages,year:b.year||'',publisher:b.publisher||'',by:b.rec||b.by,dateRec:b.dateRec||'',about:b.about||'',group:g.name,review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
       save();btn.disabled=true;btn.classList.remove('pri');btn.textContent='✓ Added to Want to read'})};
   api('GET',`/groups/${g.token}`).then(d=>draw(d.books)).catch(e=>{st.textContent=e.status===404?'This shared list no longer exists.':'Couldn’t load the shared list — check your connection.'});
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;

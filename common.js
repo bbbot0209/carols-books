@@ -40,7 +40,7 @@ function guessGenre(subjects){
 }
 // Title autocomplete from Open Library. Dropdown sits in the form flow (under the input) so it scrolls with the
 // iOS keyboard open; mousedown is cancelled so tapping a suggestion doesn't blur the field first.
-const OL='https://openlibrary.org/search.json?limit=8&fields=key,title,author_name,number_of_pages_median,subject,first_publish_year,cover_i&q=';
+const OL='https://openlibrary.org/search.json?limit=8&fields=key,title,author_name,number_of_pages_median,subject,first_publish_year,cover_i,publisher&q=';
 // Short titles ("Land") drown in OL relevance ranking, so also try "title author" splits of the typed words
 // (title=Land&author=Maggie) and float exact-title matches to the top. Apostrophes break OL tokenizing.
 const olNorm=t=>(t||'').toLowerCase().replace(/[\u2018\u2019'`]/g,' ').replace(/[^\p{L}\p{N} ]+/gu,' ').replace(/\s+/g,' ').trim();
@@ -69,8 +69,14 @@ function bookAC(inp,pick){
   inp.addEventListener('keydown',e=>{if(e.key==='Escape'){seq++;hide()}});
   box.addEventListener('mousedown',e=>e.preventDefault());
   box.addEventListener('click',e=>{const el=e.target.closest('[data-i]'),x=el&&docs[+el.dataset.i];if(!x)return;seq++;hide();
-    pick({key:/^\/works\/OL\w+$/.test(x.key||'')?x.key:'',title:x.title,author:(x.author_name||[])[0]||'',pages:x.number_of_pages_median||'',cover:x.cover_i?`https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg`:'',...guessGenre(x.subject)});inp.blur()});
+    pick({key:/^\/works\/OL\w+$/.test(x.key||'')?x.key:'',title:x.title,author:(x.author_name||[])[0]||'',pages:x.number_of_pages_median||'',year:x.first_publish_year||'',cover:x.cover_i?`https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg`:'',...guessGenre(x.subject)});inp.blur()});
 }
+// Best edition of a work for pages/publisher/year: prefer English, then editions that have those fields.
+const olEdition=async k=>{if(!k)return{};try{const es=(await (await fetch('https://openlibrary.org'+k+'/editions.json?limit=50')).json()).entries||[];
+  const sc=e=>((e.languages||[]).some(l=>l.key==='/languages/eng')?4:(e.languages||[]).length?0:1)+(e.number_of_pages?2:0)+((e.publishers||[]).length?2:0)+(e.publish_date?1:0);
+  const e=es.sort((a,b)=>sc(b)-sc(a))[0]||{},y=(String(e.publish_date||'').match(/\b(1[5-9]|20)\d\d\b/)||[''])[0];
+  const pg=es.map(x=>x.number_of_pages).find(n=>n>0&&n<=10000);
+  return{pages:e.number_of_pages>0&&e.number_of_pages<=10000?e.number_of_pages:pg||'',publisher:(e.publishers||[])[0]||'',year:y}}catch{return{}}};
 // Work description ("About the book") from Open Library; resolves '' on any failure.
 const olAbout=async k=>{if(!k)return'';try{const d=await (await fetch('https://openlibrary.org'+k+'.json')).json(),v=d.description;
   return String(typeof v==='object'&&v?v.value||'':v||'').replace(/\r/g,'').replace(/\(\[source\][^)]*\)/g,'').replace(/-{3,}[\s\S]*$/,'').trim().slice(0,2000)}catch{return''}};
@@ -78,3 +84,9 @@ const aboutHtml=b=>b.about?`<div class="about">${esc(b.about.length>240?b.about.
 const recPill=b=>(b.rec||b.dateRec)?`<span class="pill">rec.${b.rec?' by '+esc(b.rec):''}${b.dateRec?(b.rec?' · ':' ')+fmtDay(b.dateRec):''}</span>`:'';
 const fmtDay=d=>{const[y,m,dd]=(d||'').split('-');return y&&m&&dd?new Date(y,m-1,dd).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):esc(d)};
 const coverImg=b=>/^https:\/\/covers\.openlibrary\.org\/\S+$/.test(b.cover||'')?`<img class="cv" src="${esc(b.cover)}" alt="" loading="lazy" onerror="this.remove()">`:'';
+
+// Fill a book form from a picked suggestion: title/author always, the rest only into empty fields.
+function fillPicked(f,b){const fv=n=>f.querySelector(`[name=${n}]`),set=(n,v)=>{const el=fv(n);if(el&&v&&!el.value)el.value=v};
+  fv('title').value=b.title;fv('author').value=b.author;fv('cover').value=b.cover;set('pages',b.pages);set('year',b.year);
+  if(!fv('about').value)olAbout(b.key).then(a=>set('about',a));
+  olEdition(b.key).then(e=>{set('pages',e.pages);set('publisher',e.publisher);set('year',e.year)})}
