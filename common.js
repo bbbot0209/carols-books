@@ -103,3 +103,8 @@ function fillPicked(f,b,onCat){const fv=n=>f.querySelector(`[name=${n}]`),set=(n
   if(!fv('about').value)olAbout(b.key).then(a=>a||ap.then(x=>x.about)).then(a=>set('about',a));
   olEdition(b.key).then(e=>{set('pages',e.pages);set('year',e.year);
     return ap}).then(x=>{set('year',x.year);if(!b.cat&&onCat&&x.genres){const g=guessGenre(x.genres);if(g.cat)onCat(g)}})}
+// Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
+const APPV='20261107c';
+const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
+  if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
+checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});
