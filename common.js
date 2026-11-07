@@ -41,16 +41,29 @@ function guessGenre(subjects){
 // Title autocomplete from Open Library. Dropdown sits in the form flow (under the input) so it scrolls with the
 // iOS keyboard open; mousedown is cancelled so tapping a suggestion doesn't blur the field first.
 const OL='https://openlibrary.org/search.json?limit=8&fields=key,title,author_name,number_of_pages_median,subject,first_publish_year,cover_i&q=';
+// Short titles ("Land") drown in OL relevance ranking, so also try "title author" splits of the typed words
+// (title=Land&author=Maggie) and float exact-title matches to the top. Apostrophes break OL tokenizing.
+const olNorm=t=>(t||'').toLowerCase().replace(/[\u2018\u2019'`]/g,' ').replace(/[^\p{L}\p{N} ]+/gu,' ').replace(/\s+/g,' ').trim();
+async function olFind(q,signal){
+  const n=olNorm(q),w=n.split(' '),urls=[OL+encodeURIComponent(n)],base=OL.replace(/&q=$/,'');
+  for(const k of new Set([1,w.length-1]))if(k>0&&k<w.length)urls.push(base+'&title='+encodeURIComponent(w.slice(0,k).join(' '))+'&author='+encodeURIComponent(w.slice(k).join(' ')));
+  const res=await Promise.all(urls.map(u=>fetch(u,{signal}).then(r=>r.json()).then(j=>j.docs||[]).catch(()=>[])));
+  if(signal.aborted)throw 0;
+  const seen=new Set(),out=[];
+  for(const x of [...res.slice(1).flat(),...res[0]])if(x.title&&!seen.has(x.key)){seen.add(x.key);out.push(x)}
+  const ex=x=>olNorm(x.title)===n||w.some((_,k)=>k&&olNorm(x.title)===w.slice(0,k).join(' ')&&olNorm((x.author_name||[]).join(' ')).includes(w.slice(k).join(' ')));
+  return [...out.filter(ex),...out.filter(x=>!ex(x))];
+}
 function bookAC(inp,pick){
   const box=document.createElement('div'),cache=new Map();box.className='ac';box.hidden=true;inp.after(box);
   let seq=0,t=0,docs=[];
   const hide=()=>{box.hidden=true;box.innerHTML='';docs=[]};
   const show=d=>{docs=d.filter(x=>x.title).slice(0,6);if(!docs.length||document.activeElement!==inp)return hide();
-    box.innerHTML=docs.map((x,i)=>`<div data-i="${i}">${x.cover_i?`<img src="https://covers.openlibrary.org/b/id/${x.cover_i}-S.jpg" alt="">`:'<i></i>'}<p><b>${esc(x.title)}</b><span>${esc([(x.author_name||[])[0],x.first_publish_year].filter(Boolean).join(' · '))}</span></p></div>`).join('');box.hidden=false};
+    box.innerHTML=docs.map((x,i)=>`<div data-i="${i}">${x.cover_i?`<img src="https://covers.openlibrary.org/b/id/${x.cover_i}-S.jpg" alt="">`:'<i></i>'}<p><b>${esc(x.title)}</b><span>${esc([(x.author_name||[])[0],x.first_publish_year].filter(Boolean).join(' · '))}</span></p></div>`).join('')+'<div class="hint">Not listed? Add the author, e.g. “Land Maggie”</div>';box.hidden=false};
   inp.addEventListener('input',()=>{clearTimeout(t);const q=inp.value.trim().toLowerCase(),s=++seq;if(q.length<3)return hide();
     if(cache.has(q))return show(cache.get(q));
     t=setTimeout(async()=>{try{const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),8000);
-      const r=await fetch(OL+encodeURIComponent(q),{signal:ctl.signal}).finally(()=>clearTimeout(tm));const d=(await r.json()).docs||[];
+      const d=await olFind(q,ctl.signal).finally(()=>clearTimeout(tm));
       cache.set(q,d);if(s===seq)show(d)}catch{if(s===seq)hide()}},300)});
   inp.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==inp){seq++;hide()}},250));
   inp.addEventListener('keydown',e=>{if(e.key==='Escape'){seq++;hide()}});
