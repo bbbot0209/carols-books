@@ -101,5 +101,5 @@ function fillPicked(f,b,onCat){const fv=n=>f.querySelector(`[name=${n}]`),set=(n
   fv('title').value=b.title;fv('author').value=b.author;fv('cover').value=b.cover;set('pages',b.pages);set('year',b.year);
   const ap=appleBook(b.title,b.author);
   if(!fv('about').value)olAbout(b.key).then(a=>a||ap.then(x=>x.about)).then(a=>set('about',a));
-  olEdition(b.key).then(e=>{set('pages',e.pages);set('publisher',e.publisher);set('year',e.year);
+  olEdition(b.key).then(e=>{set('pages',e.pages);set('year',e.year);
     return ap}).then(x=>{set('year',x.year);if(!b.cat&&onCat&&x.genres){const g=guessGenre(x.genres);if(g.cat)onCat(g)}})}

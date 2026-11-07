@@ -178,7 +178,7 @@ function edit(eid){
     f.innerHTML=`${bar(eid?'Edit book':read?'Book I read':'Book to read')}<div class="fb">
       <label>Title</label><input name="title" required value="${esc(it.title)}"><input type="hidden" name="cover" value="${esc(it.cover)}">
       <div class="row"><div style="flex:3"><label>Author</label><input name="author" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
-      <div class="row"><div><label>Year published</label><input name="year" inputmode="numeric" maxlength="4" value="${esc(it.year)}"></div><div style="flex:3"><label>Publisher</label><input name="publisher" value="${esc(it.publisher)}"></div></div>
+      <label>Year published</label><input name="year" inputmode="numeric" maxlength="4" value="${esc(it.year)}">
       <div class="row"><div style="flex:3"><label>Recommended by</label><input name="by" value="${esc(it.by)}"></div><div style="flex:2"><label>Date recommended</label><input name="dateRec" type="date" value="${esc(it.dateRec??(!eid&&!read?today():''))}"></div></div>
       <label>Category</label><div class="seg" data-f="cat">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${it.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
       <label>Genre</label><div class="chips"></div><input name="genre" value="${esc(it.genre)}" placeholder="Or type your own">
