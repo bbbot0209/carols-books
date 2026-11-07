@@ -9,9 +9,9 @@ const GENRES={'Fiction':['Literary fiction','Mystery','Thriller & suspense','Rom
 // Category is a free text field now; store the canonical two values.
 const normCat=c=>{c=String(c||'').toLowerCase();return c.includes('non')?'Non-fiction':c.includes('fic')?'Fiction':''};
 const catOf=g=>Object.keys(GENRES).find(c=>GENRES[c].includes(g))||'';
-// Review text links to the review URL when both exist; otherwise whichever is there.
-const reviewHtml=b=>{const u=/^https?:\/\/\S+$/i.test(b.review||'')?b.review:'',t=(b.reviewText||'').trim(),a=`href="${esc(u)}" target="_blank" rel="noopener"`;
-  return t&&u?`<div class="note rv"><a ${a}>${esc(t)}</a> ↗</div>`:t?`<div class="note rv">${esc(t)}</div>`:u?`<div class="note"><a ${a}>Review ↗</a></div>`:''};
+// Review link only (review text field removed 11/7 at Carol's request).
+const reviewHtml=b=>{const u=/^https?:\/\/\S+$/i.test(b.review||'')?b.review:'';
+  return u?`<div class="note"><a href="${esc(u)}" target="_blank" rel="noopener">Review ↗</a></div>`:''};
 async function api(method,path,body){
   const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
   try{
@@ -106,7 +106,7 @@ function fillPicked(f,b,onCat){const fv=n=>f.querySelector(`[name=${n}]`),set=(n
   olEdition(b.key).then(e=>{set('pages',e.pages);set('year',e.year);
     return ap}).then(x=>{set('year',x.year);if(!b.cat&&onCat&&x.genres){const g=guessGenre(x.genres);if(g.cat)onCat(g)}})}
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261107d';
+const APPV='20261107e';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});

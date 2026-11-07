@@ -108,7 +108,7 @@
 
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
-<script src="common.js?v=20261107d"></script>
+<script src="common.js?v=20261107e"></script>
 
 <script>
 const KEY='carol-books-v1';
@@ -185,7 +185,6 @@ function edit(eid){
       <label>My rating</label><div class="rate">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" class="${(it.rating||0)>=n?'on':''}">★</button>`).join('')}</div>`:''}
       <label>Book group</label><input name="group" list="gl" value="${esc(it.group)}"><datalist id="gl">${gl.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
       <label>About the book</label><textarea name="about" placeholder="Fills in when you pick a suggested title">${esc(it.about)}</textarea>
-      <label>Review</label><textarea name="reviewText" placeholder="Where it’s from / what it said — e.g. NYT: “a quiet masterpiece”">${esc(it.reviewText)}</textarea>
       <label>Review link</label><input name="review" type="url" inputmode="url" value="${esc(it.review)}" placeholder="https://…">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
   }

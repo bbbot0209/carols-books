@@ -79,7 +79,7 @@
 <main id="list"><div class="count">Loading…</div></main>
 <button class="fab" id="add" aria-label="Add a book" hidden>+</button>
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
-<script src="common.js?v=20261107d"></script>
+<script src="common.js?v=20261107e"></script>
 <script>
 const LKEY='carol-books-group';
 const me=JSON.parse(localStorage.getItem(LKEY)||'null')||{name:'',mine:{}};
@@ -120,7 +120,6 @@ function edit(eid){
     <div class="row"><div><label>Category</label><input name="cat" maxlength="20" value="${esc(it.cat)}" placeholder="Fills in automatically"></div><div style="flex:2"><label>Genre</label><input name="genre" maxlength="60" value="${esc(it.genre)}" placeholder="Fills in automatically"></div></div>
     <label>Added by (your name)</label><input name="by" required maxlength="60" value="${esc(eid?it.by:me.name)}">
     <label>About the book</label><textarea name="about" maxlength="2000" placeholder="Fills in when you pick a suggested title">${esc(it.about)}</textarea>
-    <label>Review</label><textarea name="reviewText" maxlength="1000" placeholder="Where it’s from / what it said — e.g. NYT: “a quiet masterpiece”">${esc(it.reviewText)}</textarea>
     <label>Review link</label><input name="review" type="url" inputmode="url" maxlength="500" value="${esc(it.review)}" placeholder="https://…">
     <label>Notes</label><textarea name="notes" maxlength="2000">${esc(it.notes)}</textarea>
     <div class="err"></div>
