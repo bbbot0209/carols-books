@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Book group">
+<meta name="theme-color" content="#f6f1e7">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<title>Book group</title>
+<style>
+  :root{--bg:#f6f1e7;--card:#fffdf8;--ink:#2b2420;--mute:#8a7f74;--line:#e6ddcf;--acc:#8c3b2e;--acc2:#2f5d50}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(12px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line)}
+  h1{font:600 26px Georgia,"Times New Roman",serif;margin:0}
+  .sub{color:var(--mute);font-size:14px;margin:2px 0 8px}
+  header input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:16px;color:var(--ink)}
+  main{padding:12px 16px}
+  .count{color:var(--mute);font-size:14px;margin:4px 2px 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .card .t{font:600 18px Georgia,serif}
+  .card .a{color:var(--mute);font-size:15px}
+  .card .mine{float:right;font-size:13px;color:var(--acc2)}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .pill{font-size:13px;padding:3px 9px;border-radius:99px;background:#efe7d8}
+  .pill.f{background:#f3e0dc;color:var(--acc)} .pill.n{background:#dde9e4;color:var(--acc2)}
+  .note{margin-top:8px;font-size:15px;white-space:pre-wrap}
+  .note a{color:var(--acc2);word-break:break-all}
+  .rv{font-style:italic}
+  .empty{text-align:center;color:var(--mute);padding:40px 10px}
+  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;border:0;background:var(--acc);color:#fff;font-size:34px;line-height:60px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+  dialog{border:0;padding:0;margin:0;width:100%;max-width:100%;height:100%;max-height:100%;background:var(--card);color:var(--ink);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  @media (min-width:640px){dialog{margin:auto;width:560px;height:auto;max-height:90vh;border-radius:18px}}
+  html.modal,html.modal body{overflow:hidden}
+  .bar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;background:var(--card);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top)) 8px 8px}
+  .bar h2{flex:1;margin:0;text-align:center;font:600 18px Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar button{flex:0 0 76px;padding:9px 6px;border:0;border-radius:10px;background:none;font-size:17px;color:var(--acc2)}
+  .bar .pri{background:var(--acc);color:#fff;font-weight:600}
+  .bar button:focus{outline:none}
+  .fb{padding:4px 16px calc(24px + env(safe-area-inset-bottom))}
+  label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+  form input,form textarea{display:block;width:100%;max-width:100%;min-width:0;-webkit-appearance:none;appearance:none;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:#fff;color:var(--ink);font-family:inherit}
+  textarea{min-height:90px}
+  .row{display:flex;gap:10px}.row>div{flex:1;min-width:0}
+  .seg{display:flex;gap:6px}.seg button{flex:1;padding:9px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:15px;color:var(--ink)}
+  .seg button.on{background:var(--ink);color:#fff}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.chips button{padding:7px 11px;border:1px solid var(--line);border-radius:99px;background:#fff;font-size:14px;color:var(--ink)}
+  .chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btns{display:flex;gap:8px;margin-top:20px}
+  .btns button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:16px;color:var(--ink)}
+  .btns .del{color:#b3261e;flex:0 0 auto}
+  .err{color:#b3261e;font-size:14px;margin-top:10px}
+  .bad{text-align:center;padding:80px 24px;color:var(--mute)}
+  .bad h1{color:var(--ink);margin-bottom:8px}
+  #msg{position:fixed;left:16px;right:90px;bottom:calc(26px + env(safe-area-inset-bottom));background:var(--ink);color:#fff;font-size:14px;padding:10px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:20}
+  #msg.on{opacity:.94}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="gname">Book group</h1>
+  <div class="sub">Shared book list</div>
+  <input id="q" type="search" placeholder="Search title, author, person…">
+</header>
+<main id="list"><div class="count">Loading…</div></main>
+<button class="fab" id="add" aria-label="Add a book" hidden>+</button>
+<dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
+<script src="common.js"></script>
+<script>
+const LKEY='carol-books-group';
+const me=JSON.parse(localStorage.getItem(LKEY)||'null')||{name:'',mine:{}};
+const saveMe=()=>localStorage.setItem(LKEY,JSON.stringify(me));
+let tok='',books=null,loading=false;
+const mine=()=>me.mine[tok]||(me.mine[tok]=[]);
+
+function bad(){document.title='Link not valid';document.body.innerHTML=`<div class="bad"><h1>This link isn’t valid</h1>It may have been mistyped or the group was removed.<br>Ask whoever shared it for a fresh link.</div>`}
+
+async function load(){
+  if(loading)return;loading=true;
+  try{const d=await api('GET',`/groups/${tok}`);books=d.books;$('#gname').textContent=d.name;document.title=d.name;$('#add').hidden=false;render()}
+  catch(e){if(e.status===404)return bad();if(!books)$('#list').innerHTML=`<div class="empty">Couldn’t load the book list.<br>Check your connection — it will retry.</div>`;else msg('Offline — showing the last list.')}
+  finally{loading=false}
+}
+function render(){
+  if(!books)return;
+  const q=$('#q').value.toLowerCase(),M=mine();
+  const items=books.filter(b=>!q||[b.title,b.author,b.by,b.genre,b.notes,b.reviewText].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.added-a.added);
+  $('#list').innerHTML=`<div class="count">${items.length}${items.length!==books.length?' of '+books.length:''} book${books.length===1?'':'s'}</div>`+(items.length?items.map(b=>`
+    <div class="card" data-id="${esc(b.id)}">${M.includes(b.id)?'<span class="mine">Edit</span>':''}
+      <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
+      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.by?`<span class="pill">from ${esc(b.by)}</span>`:''}</div>
+      ${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
+    </div>`).join(''):`<div class="empty">${books.length?'Nothing matches.':'No books yet.<br>Tap + to share one with the group.'}</div>`);
+  $('#list').querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName!=='A'&&M.includes(el.dataset.id))edit(el.dataset.id)});
+}
+
+const close=()=>$('#dlg').close();
+$('#dlg').addEventListener('close',()=>document.documentElement.classList.remove('modal'));
+function edit(eid){
+  const f=$('#f'),it=eid?books.find(b=>b.id===eid)||{}:{},st={cat:it.cat||''};
+  f.innerHTML=`<div class="bar"><button type="button" class="cx">Cancel</button><h2>${eid?'Edit book':'Share a book'}</h2><button class="pri">Save</button></div><div class="fb">
+    <label>Title</label><input name="title" required maxlength="200" value="${esc(it.title)}">
+    <div class="row"><div style="flex:3"><label>Author</label><input name="author" maxlength="200" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
+    <label>Category</label><div class="seg">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${st.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
+    <label>Genre</label><div class="chips"></div><input name="genre" maxlength="60" value="${esc(it.genre)}" placeholder="Or type your own">
+    <label>Your name</label><input name="by" required maxlength="60" value="${esc(eid?it.by:me.name)}">
+    <label>Review</label><textarea name="reviewText" maxlength="1000" placeholder="Where it’s from / what it said — e.g. NYT: “a quiet masterpiece”">${esc(it.reviewText)}</textarea>
+    <label>Review link</label><input name="review" type="url" inputmode="url" maxlength="500" value="${esc(it.review)}" placeholder="https://…">
+    <label>Notes</label><textarea name="notes" maxlength="2000">${esc(it.notes)}</textarea>
+    <div class="err"></div>
+    ${eid?'<div class="btns"><button type="button" class="del">Delete</button></div>':''}</div>`;
+  f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
+  const chips=f.querySelector('.chips'),gi=f.querySelector('[name=genre]'),segs=f.querySelectorAll('.seg button'),errEl=f.querySelector('.err');
+  const setCat=c=>{st.cat=c;segs.forEach(x=>x.classList.toggle('on',x.dataset.v===c))};
+  const drawChips=()=>{const gs=st.cat?GENRES[st.cat]:[...GENRES['Fiction'],...GENRES['Non-fiction']];
+    chips.innerHTML=gs.map(g=>`<button type="button" class="${gi.value===g?'on':''}">${g}</button>`).join('');
+    chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{const g=b.textContent;gi.value=gi.value===g?'':g;if(gi.value&&catOf(g)!==st.cat)setCat(catOf(g));drawChips()})};
+  segs.forEach(b=>b.onclick=()=>{setCat(b.classList.contains('on')?'':b.dataset.v);drawChips()});
+  gi.oninput=drawChips;drawChips();
+  f.querySelector('.cx').onclick=close;
+  const del=f.querySelector('.del');
+  if(del)del.onclick=async()=>{if(!confirm('Remove this book from the group list?'))return;
+    try{await api('DELETE',`/groups/${tok}/books/${eid}`);books=books.filter(b=>b.id!==eid);me.mine[tok]=mine().filter(x=>x!==eid);saveMe();close();render()}
+    catch(e){errEl.textContent=e.status===404?'Already removed.':'Couldn’t delete — check your connection.';if(e.status===404){close();load()}}};
+  f.onsubmit=async e=>{e.preventDefault();if(!f.reportValidity())return;
+    const o={...Object.fromEntries(new FormData(f)),cat:st.cat};me.name=o.by.trim();saveMe();
+    const sv=f.querySelector('.bar .pri');sv.disabled=true;errEl.textContent='';
+    try{
+      if(eid){const b=await api('PUT',`/groups/${tok}/books/${eid}`,o);books=books.map(x=>x.id===eid?b:x)}
+      else{const b=await api('POST',`/groups/${tok}/books`,o);books.push(b);mine().push(b.id);saveMe()}
+      close();render();
+    }catch(e){errEl.textContent=e.status&&e.status<500?e.message:'Couldn’t save — check your connection and try again.'}
+    finally{sv.disabled=false}};
+  document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;f.querySelector('.cx').focus({preventScroll:true});
+}
+
+function start(){
+  tok=(location.hash.slice(1).match(/^[A-Za-z0-9_-]{24,64}$/)||[''])[0];
+  if(!tok)return bad();
+  books=null;load();
+}
+$('#q').oninput=render;
+$('#add').onclick=()=>edit(null);
+addEventListener('hashchange',()=>location.reload());
+addEventListener('focus',()=>tok&&load());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&tok)load()});
+setInterval(()=>{if(!document.hidden&&tok&&!$('#dlg').open)load()},30000);
+start();
+</script>
+</body>
+</html>

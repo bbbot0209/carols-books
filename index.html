@@ -22,7 +22,7 @@
   .tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .tools{display:flex;gap:8px;margin-top:8px}
   .tools input,.tools select{flex:1;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:16px;color:var(--ink)}
-  .tools select{flex:0 0 auto}
+  .tools select{flex:0 1 auto;max-width:42%}
   main{padding:12px 16px}
   .count{color:var(--mute);font-size:14px;margin:4px 2px 10px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
@@ -48,7 +48,7 @@
   .fb{padding:4px 16px calc(24px + env(safe-area-inset-bottom))}
   label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
   form input,form select,form textarea{display:block;width:100%;max-width:100%;min-width:0;-webkit-appearance:none;appearance:none;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:#fff;color:var(--ink);font-family:inherit}
-  form input[type=month]{min-height:44px;text-align:left}
+  form input[type=month],form input[type=date]{min-height:44px;text-align:left}
   textarea{min-height:90px}
   .row{display:flex;gap:10px}.row>div{flex:1;min-width:0}
   .seg{display:flex;gap:6px}.seg button{flex:1;padding:9px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:15px;color:var(--ink)}
@@ -63,6 +63,19 @@
   .small{font-size:13px;color:var(--mute);text-align:center;margin:24px 0 6px}
   .small button{background:none;border:0;color:var(--acc2);font-size:13px;text-decoration:underline;padding:4px 8px}
   .group{margin-bottom:6px}
+  .gact{display:flex;gap:8px;margin-top:10px}
+  .gact button,.sbtn{padding:7px 12px;border:1px solid var(--line);border-radius:99px;background:#fff;font-size:14px;color:var(--acc2)}
+  .gact button.pri,.sbtn.pri{background:var(--acc2);color:#fff;border-color:var(--acc2)}
+  .sbtn:disabled{color:var(--mute);background:none}
+  .pill.sh{background:#dde9e4;color:var(--acc2)}
+  .rv{font-style:italic}.rv a{color:var(--acc2)}
+  .status{color:var(--mute);font-size:14px;margin:12px 2px}
+  #msg{position:fixed;left:16px;right:90px;bottom:calc(26px + env(safe-area-inset-bottom));background:var(--ink);color:#fff;font-size:14px;padding:10px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:20}
+  #msg.on{opacity:.94}
+  dialog.sm{height:fit-content;max-height:85vh;margin:auto;width:calc(100% - 32px);max-width:420px;border-radius:18px;padding:18px}
+  dialog.sm h3{margin:0 0 6px;font:600 19px Georgia,serif}
+  dialog.sm p{margin:0 0 10px;font-size:15px;color:var(--mute)}
+  dialog.sm input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -80,26 +93,24 @@
 </header>
 <main id="list"></main>
 <div class="small">
-  <button id="exp">Back up</button>·<button id="imp">Restore</button>
+  <button id="exp">Back up</button>·<button id="imp">Restore</button>·<button id="dev">Use on another device</button>
   <input id="impf" type="file" accept=".json,application/json" hidden>
 </div>
 <button class="fab" id="add" aria-label="Add">+</button>
 
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
+<dialog id="sh" class="sm"></dialog>
+<script src="common.js"></script>
 
 <script>
 const KEY='carol-books-v1';
 let db=JSON.parse(localStorage.getItem(KEY)||'null')||{read:[],want:[],groups:[]};
+db.groups=db.groups||[];
 let tab='read';
-const $=s=>document.querySelector(s);
-const save=()=>localStorage.setItem(KEY,JSON.stringify(db));
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const link=s=>esc(s).replace(/(https?:\/\/[^\s]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+const save=()=>{localStorage.setItem(KEY,JSON.stringify(db));sync.mtime=Date.now();saveSync();schedulePush()};
 const id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-const fmtDate=d=>{if(!d)return'';const[y,m]=d.split('-');return m?new Date(y,m-1).toLocaleString(undefined,{month:'short',year:'numeric'}):y};
-const GENRES={'Fiction':['Literary fiction','Mystery','Thriller & suspense','Romance','Historical fiction','Fantasy','Science fiction','Horror','Short stories','Classics','Young adult','Graphic novel','Poetry'],
-  'Non-fiction':['Biography & memoir','History','Science & nature','Politics & current events','Business & economics','Self-help','Health & wellness','Religion & spirituality','Philosophy','Psychology','True crime','Travel','Food & cooking','Art & music','Essays']};
-const catOf=g=>Object.keys(GENRES).find(c=>GENRES[c].includes(g))||'';
+const fmtDate=d=>{if(!d)return'';const[y,m,day]=d.split('-');return day?new Date(y,m-1,day).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):m?new Date(y,m-1).toLocaleString(undefined,{month:'short',year:'numeric'}):y};
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
 $('#cat').innerHTML='<option value="">All</option>'+Object.entries(GENRES).map(([c,gs])=>`<optgroup label="${c}"><option value="${c}">All ${c.toLowerCase()}</option>${gs.map(g=>`<option>${g}</option>`).join('')}</optgroup>`).join('');
 const groupNames=()=>db.groups.map(g=>g.name).filter(Boolean);
 
@@ -112,11 +123,11 @@ function render(){
   if(tab==='groups'){
     L.innerHTML=db.groups.length?db.groups.map(g=>{
       const recs=db.want.filter(b=>b.group===g.name).length+db.read.filter(b=>b.group===g.name).length;
-      return `<div class="card" data-id="${g.id}"><div class="t">${esc(g.name)}</div>${g.members?`<div class="a">${esc(g.members)}</div>`:''}<div class="meta">${g.meets?`<span class="pill">${esc(g.meets)}</span>`:''}<span class="pill">${recs} book${recs===1?'':'s'}</span></div>${g.notes?`<div class="note">${link(g.notes)}</div>`:''}</div>`}).join('')
+      return `<div class="card" data-id="${g.id}"><div class="t">${esc(g.name)}</div>${g.members?`<div class="a">${esc(g.members)}</div>`:''}<div class="meta">${g.meets?`<span class="pill">${esc(g.meets)}</span>`:''}<span class="pill">${recs} book${recs===1?'':'s'}</span>${g.token?'<span class="pill sh">Shared</span>':''}</div>${g.notes?`<div class="note">${link(g.notes)}</div>`:''}<div class="gact">${g.token?'<button type="button" class="open">Shared list</button>':''}<button type="button" class="share">Share link</button></div></div>`}).join('')
       :`<div class="empty">No book groups yet.<br>Tap + to add one.</div>`;
   }else{
     const q=$('#q').value.toLowerCase(),c=$('#cat').value;
-    let items=db[tab].filter(b=>(!c||b.cat===c||b.genre===c)&&(!q||[b.title,b.author,b.by,b.group,b.genre,b.notes].join(' ').toLowerCase().includes(q)));
+    let items=db[tab].filter(b=>(!c||b.cat===c||b.genre===c)&&(!q||[b.title,b.author,b.by,b.group,b.genre,b.notes,b.reviewText].join(' ').toLowerCase().includes(q)));
     items.sort(tab==='read'?(a,b)=>(b.date||'').localeCompare(a.date||''):(a,b)=>(b.added||0)-(a.added||0));
     const n=db[tab].length;
     L.innerHTML=`<div class="count">${items.length}${items.length!==n?' of '+n:''} book${n===1?'':'s'}</div>`+(items.length?items.map(b=>`
@@ -125,16 +136,21 @@ function render(){
         <div class="meta">
           ${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${b.cat}</span>`:''}
           ${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}
+          ${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}
           ${tab==='read'&&b.date?`<span class="pill">${fmtDate(b.date)}</span>`:''}
           ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
           ${b.by?`<span class="pill">from ${esc(b.by)}</span>`:''}
           ${b.group?`<span class="pill">${esc(b.group)}</span>`:''}
         </div>
-        ${b.review?`<div class="note"><a href="${esc(b.review)}" target="_blank" rel="noopener">Review ↗</a></div>`:''}
+        ${reviewHtml(b)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
       </div>`).join(''):`<div class="empty">${n?'Nothing matches.':tab==='read'?'No books yet.<br>Tap + to add one you’ve read.':'No books yet.<br>Tap + to add a recommendation.'}</div>`);
   }
-  L.querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName!=='A')edit(el.dataset.id)});
+  L.querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName==='A')return;
+    const g=tab==='groups'&&db.groups.find(x=>x.id===el.dataset.id);
+    if(g&&e.target.closest('.share'))return shareGroup(g);
+    if(g&&g.token)return groupView(g);
+    edit(el.dataset.id)});
 }
 
 const bar=t=>`<div class="bar"><button type="button" class="cx">Cancel</button><h2>${esc(t)}</h2><button class="pri">Save</button></div>`;
@@ -153,18 +169,19 @@ function edit(eid){
     const read=tab==='read',gl=groupNames();
     f.innerHTML=`${bar(eid?'Edit book':read?'Book I read':'Book to read')}<div class="fb">
       <label>Title</label><input name="title" required value="${esc(it.title)}">
-      <label>Author</label><input name="author" value="${esc(it.author)}">
+      <div class="row"><div style="flex:3"><label>Author</label><input name="author" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
+      <label>Recommended by</label><input name="by" value="${esc(it.by)}">
       <label>Category</label><div class="seg" data-f="cat">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${it.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
       <label>Genre</label><div class="chips"></div><input name="genre" value="${esc(it.genre)}" placeholder="Or type your own">
-      ${read?`<label>When I read it</label><input name="date" type="month" value="${esc(it.date)}">
+      ${read?`<label>Date read</label><input name="date" type="date" value="${esc(/^\d{4}-\d{2}$/.test(it.date||'')?it.date+'-01':it.date)}">
       <label>My rating</label><div class="rate">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" class="${(it.rating||0)>=n?'on':''}">★</button>`).join('')}</div>`:''}
-      <div class="row"><div><label>Recommended by</label><input name="by" value="${esc(it.by)}"></div>
-      <div><label>Book group</label><input name="group" list="gl" value="${esc(it.group)}"><datalist id="gl">${gl.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div></div>
+      <label>Book group</label><input name="group" list="gl" value="${esc(it.group)}"><datalist id="gl">${gl.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+      <label>Review</label><textarea name="reviewText" placeholder="Where it’s from / what it said — e.g. NYT: “a quiet masterpiece”">${esc(it.reviewText)}</textarea>
       <label>Review link</label><input name="review" type="url" inputmode="url" value="${esc(it.review)}" placeholder="https://…">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
   }
   const st={cat:it.cat||'',rating:it.rating||0};
-  f.innerHTML+=(eid?`<div class="btns">${tab==='want'?'<button type="button" class="mv">Mark read</button>':''}<button type="button" class="del">Delete</button></div>`:'')+'</div>';
+  f.innerHTML+=(eid?`<div class="btns">${tab==='want'?'<button type="button" class="mv">Mark read</button>':''}${tab==='groups'?'<button type="button" class="shr">Share link</button>':''}<button type="button" class="del">Delete</button></div>`:'')+'</div>';
   f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
   f.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{st.cat=b.classList.contains('on')?'':b.dataset.v;f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))});
   f.querySelectorAll('.rate button').forEach(b=>b.onclick=()=>{const n=+b.dataset.n;st.rating=st.rating===n?0:n;f.querySelectorAll('.rate button').forEach(x=>x.classList.toggle('on',+x.dataset.n<=st.rating))});
@@ -176,10 +193,13 @@ function edit(eid){
   const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups'){o.cat=st.cat;if(tab==='read')o.rating=st.rating}return o};
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();close();render()}};
-  const mv=f.querySelector('.mv');if(mv)mv.onclick=()=>{const o=collect();db.want=db.want.filter(x=>x.id!==eid);o.date=new Date().toISOString().slice(0,7);db.read.push(o);save();close();document.querySelector('[data-tab=read]').click();edit(o.id)};
+  const shr=f.querySelector('.shr');if(shr)shr.onclick=()=>shareGroup(it);
+  const mv=f.querySelector('.mv');if(mv)mv.onclick=()=>{const o=collect();db.want=db.want.filter(x=>x.id!==eid);o.date=today();db.read.push(o);save();pushBook(o);close();document.querySelector('[data-tab=read]').click();edit(o.id)};
   f.onsubmit=e=>{e.preventDefault();if(!f.reportValidity())return;const o=collect();
-    if(eid)Object.assign(it,o);else list.push({...o,id:id(),added:Date.now()});
-    save();close();render()};
+    let rec=it;
+    if(tab==='groups'){if(eid&&it.name!==o.name)renameGroup(it,o.name)}
+    if(eid)Object.assign(it,o);else list.push(rec={...o,id:id(),added:Date.now()});
+    save();close();render();if(tab!=='groups')pushBook(rec)};
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;f.querySelector('.cx').focus({preventScroll:true});
 }
 
@@ -189,9 +209,116 @@ $('#exp').onclick=async()=>{
   if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:name});return}catch(e){if(e.name==='AbortError')return}}
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();
 };
+$('#dev').onclick=()=>shareLib();
 $('#imp').onclick=()=>$('#impf').click();
 $('#impf').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!d.read||!d.want)throw 0;if(confirm('Replace everything here with this backup?')){db={groups:[],...d};save();render()}}catch{alert('That file isn’t a books backup.')}e.target.value=''};
+
+// ---------- shared book groups ----------
+const gByName=n=>db.groups.find(g=>g.name&&g.name===n);
+const toShared=b=>({title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',by:'Carol',review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:b.reviewText,notes:b.notes});
+// Push one of Carol's books to its shared group (create or update). Never throws.
+async function pushBook(b,quiet){
+  const g=b&&b.group&&gByName(b.group);if(!g||!g.token)return true;
+  if(b.sid&&b.stok===g.token&&!b.sown)return true;          // came from the group; not hers to push
+  try{
+    if(b.sid&&b.stok===g.token)await api('PUT',`/groups/${g.token}/books/${b.sid}`,toShared(b)).catch(e=>{if(e.status!==404)throw e});
+    else{const r=await api('POST',`/groups/${g.token}/books`,toShared(b));Object.assign(b,{sid:r.id,stok:g.token,sown:true})}
+    delete b.dirty;save();return true;
+  }catch(e){b.dirty=1;save();if(!quiet)msg(`Saved here — couldn’t share to “${g.name}” yet (offline?). Will retry.`);return false}
+}
+async function syncPending(){for(const b of [...db.want,...db.read])if(b.dirty&&!(await pushBook(b,true)))return false;return true}
+function renameGroup(g,name){
+  [...db.want,...db.read].forEach(b=>{if(b.group===g.name)b.group=name});
+  if(g.token)api('PATCH',`/groups/${g.token}`,{name}).catch(()=>msg('Renamed here — couldn’t update the shared list name.'));
+}
+function linkBox(title,sub,url,shareTitle){
+  const d=$('#sh');
+  d.innerHTML=`<h3>${esc(title)}</h3><p>${esc(sub)}</p><input readonly value="${esc(url)}"><div class="btns" style="margin-top:12px">${navigator.share?'<button type="button" class="pri s">Share…</button>':''}<button type="button" class="c">Copy</button><button type="button" class="x">Done</button></div>`;
+  const inp=d.querySelector('input');inp.onclick=()=>inp.select();
+  const s=d.querySelector('.s');if(s)s.onclick=()=>navigator.share({title:shareTitle,url}).catch(()=>{});
+  d.querySelector('.c').onclick=async e=>{try{await navigator.clipboard.writeText(url)}catch{inp.select();document.execCommand('copy')}e.target.textContent='Copied ✓'};
+  d.querySelector('.x').onclick=()=>d.close();
+  d.showModal();
+}
+async function shareGroup(g){
+  if(!g.name)return;
+  if(!g.token){
+    try{const r=await api('POST','/groups',{name:g.name});g.token=r.token;save();render()}
+    catch(e){return msg('Couldn’t make a share link — check your connection and try again.')}
+    const mine=[...db.want,...db.read].filter(b=>b.group===g.name&&!b.sid);
+    if(mine.length&&confirm(`Also add the ${mine.length} book${mine.length===1?'':'s'} already tagged “${g.name}” to the shared list?`)){
+      mine.forEach(b=>b.dirty=1);save();if(!(await syncPending()))msg('Some books couldn’t be shared yet — will retry.')}
+    return linkBox('Share link ready',`Anyone with this link can see and add books to “${g.name}”. They won’t see your own lists.`,SHARE_BASE+g.token,g.name);
+  }
+  const url=SHARE_BASE+g.token;
+  if(navigator.share){try{await navigator.share({title:g.name,url});return}catch(e){if(e.name==='AbortError')return}}
+  linkBox('Share link',`Anyone with this link can see and add books to “${g.name}”.`,url,g.name);
+}
+function groupView(g){
+  const f=$('#f');
+  f.innerHTML=`<div class="bar"><button type="button" class="cx">Close</button><h2>${esc(g.name)}</h2><button type="button" class="pri sh2">Share</button></div><div class="fb"><div class="status">Loading shared books…</div><div class="gl"></div>
+    <div class="btns"><button type="button" class="ed">Edit group</button></div></div>`;
+  f.onsubmit=e=>e.preventDefault();
+  f.querySelector('.cx').onclick=close;f.querySelector('.sh2').onclick=()=>shareGroup(g);
+  f.querySelector('.ed').onclick=()=>{close();edit(g.id)};
+  const st=f.querySelector('.status'),gl=f.querySelector('.gl');
+  const have=b=>[...db.want,...db.read].some(x=>x.sid===b.id||(x.title||'').trim().toLowerCase()===b.title.trim().toLowerCase()&&(x.author||'').trim().toLowerCase()===(b.author||'').trim().toLowerCase());
+  const draw=books=>{books.sort((a,b)=>b.added-a.added);
+    st.textContent=`${books.length} shared book${books.length===1?'':'s'}`;
+    gl.innerHTML=books.length?books.map(b=>`<div class="card"><div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
+      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.by?`<span class="pill">from ${esc(b.by)}</span>`:''}</div>
+      ${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
+      <div class="gact">${have(b)?'<button type="button" class="sbtn" disabled>✓ In your lists</button>':`<button type="button" class="sbtn pri" data-sid="${esc(b.id)}">Add to Want to read</button>`}</div></div>`).join('')
+      :`<div class="empty">No shared books yet.<br>Books you save with this group, and ones friends add from the link, show up here.</div>`;
+    gl.querySelectorAll('[data-sid]').forEach(btn=>btn.onclick=()=>{const b=books.find(x=>x.id===btn.dataset.sid);
+      db.want.push({title:b.title,author:b.author,cat:b.cat,genre:b.genre,pages:b.pages,by:b.by,group:g.name,review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
+      save();btn.disabled=true;btn.classList.remove('pri');btn.textContent='✓ Added to Want to read'})};
+  api('GET',`/groups/${g.token}`).then(d=>draw(d.books)).catch(e=>{st.textContent=e.status===404?'This shared list no longer exists.':'Couldn’t load the shared list — check your connection.'});
+  document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;
+}
+
+// ---------- cross-device library sync ----------
+const SKEY='carol-books-sync';
+let sync=JSON.parse(localStorage.getItem(SKEY)||'null')||{lib:'',mtime:0,synced:0};
+const saveSync=()=>localStorage.setItem(SKEY,JSON.stringify(sync));
+const isEmpty=d=>!d||!((d.read||[]).length||(d.want||[]).length||(d.groups||[]).length);
+const adopt=(rdb,ts)=>{db={read:[],want:[],groups:[],...rdb};localStorage.setItem(KEY,JSON.stringify(db));sync.mtime=sync.synced=ts;saveSync();render()};
+let pushT=0,pushing=null;
+function schedulePush(){clearTimeout(pushT);pushT=setTimeout(pushLib,800)}
+async function pushLib(){
+  if(pushing)return pushing.then(schedulePush);
+  pushing=(async()=>{try{
+    if(!sync.lib){const r=await api('POST','/libs',{db,updatedAt:sync.mtime||Date.now()});sync.lib=r.token;sync.synced=r.updatedAt;saveSync();return}
+    if(sync.mtime<=sync.synced)return;
+    await api('PUT',`/libs/${sync.lib}`,{db,updatedAt:sync.mtime});sync.synced=sync.mtime;saveSync();
+  }catch(e){if(e.status===409)await pullLib();else if(e.status===404){sync.lib='';saveSync()}}})();
+  try{await pushing}finally{pushing=null}
+}
+async function pullLib(){
+  if(!sync.lib)return pushLib();
+  try{const r=await api('GET',`/libs/${sync.lib}`);
+    if(r.updatedAt>sync.mtime&&!(isEmpty(r.db)&&!isEmpty(db))){if(!$('#dlg').open)adopt(r.db,r.updatedAt)}
+    else if(sync.mtime>r.updatedAt)schedulePush();
+  }catch(e){if(e.status===404){sync.lib='';saveSync();pushLib()}}
+}
+async function adoptLink(){
+  const m=location.hash.match(/^#lib=([A-Za-z0-9_-]{24,64})$/);if(!m)return;
+  history.replaceState(null,'',location.pathname+location.search);
+  if(m[1]===sync.lib)return;
+  let r;try{r=await api('GET',`/libs/${m[1]}`)}catch(e){return msg(e.status===404?'That device link isn’t valid.':'Couldn’t reach your synced books — try the link again later.')}
+  if(!isEmpty(db)&&!confirm('Replace the books on this device with your synced library?'))return;
+  sync.lib=m[1];adopt(r.db,r.updatedAt);msg('This device is now synced.');
+}
+async function shareLib(){
+  if(!sync.lib)await pushLib();
+  if(!sync.lib)return msg('Couldn’t set up syncing — check your connection.');
+  linkBox('Use on another device','Open this link on your other phone, tablet or computer. Your books will stay in sync. Keep it private — anyone with it can see your lists.',location.origin+location.pathname+'#lib='+sync.lib,'My books');
+}
+addEventListener('focus',()=>{pullLib();syncPending()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullLib();syncPending()}});
+addEventListener('online',()=>{pushLib();syncPending()});
 render();
+adoptLink().then(pullLib).then(syncPending);
 </script>
 </body>
 </html>
