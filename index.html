@@ -76,6 +76,12 @@
   dialog.sm h3{margin:0 0 6px;font:600 19px Georgia,serif}
   dialog.sm p{margin:0 0 10px;font-size:15px;color:var(--mute)}
   dialog.sm input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff;color:var(--ink)}
+  .card{position:relative}.card.hc{padding-left:70px;min-height:92px}
+  .card .cv{position:absolute;left:14px;top:12px;width:44px;height:66px;object-fit:cover;border-radius:4px;background:#efe7d8}
+  .ac{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:4px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+  .ac>div{display:flex;gap:10px;align-items:center;padding:7px 10px;border-top:1px solid var(--line);cursor:pointer}.ac>div:first-child{border-top:0}
+  .ac img,.ac i{flex:0 0 30px;height:44px;border-radius:3px;object-fit:cover;background:#efe7d8}
+  .ac p{margin:0;min-width:0}.ac b{display:block;font:600 15px/1.25 Georgia,serif}.ac span{font-size:13px;color:var(--mute)}
 </style>
 </head>
 <body>
@@ -93,8 +99,8 @@
 </header>
 <main id="list"></main>
 <div class="small">
-  <button id="exp">Back up</button>·<button id="imp">Restore</button>·<button id="dev">Use on another device</button>
-  <input id="impf" type="file" accept=".json,application/json" hidden>
+  <button id="exp">Back up</button>·<button id="imp">Restore</button>·<button id="gr">Import from Goodreads</button>·<button id="dev">Use on another device</button>
+  <input id="impf" type="file" accept=".json,application/json" hidden><input id="grf" type="file" accept=".csv,text/csv" hidden>
 </div>
 <button class="fab" id="add" aria-label="Add">+</button>
 
@@ -131,7 +137,7 @@ function render(){
     items.sort(tab==='read'?(a,b)=>(b.date||'').localeCompare(a.date||''):(a,b)=>(b.added||0)-(a.added||0));
     const n=db[tab].length;
     L.innerHTML=`<div class="count">${items.length}${items.length!==n?' of '+n:''} book${n===1?'':'s'}</div>`+(items.length?items.map(b=>`
-      <div class="card" data-id="${b.id}">
+      <div class="card${coverImg(b)?' hc':''}" data-id="${b.id}">${coverImg(b)}
         <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
         <div class="meta">
           ${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${b.cat}</span>`:''}
@@ -168,7 +174,7 @@ function edit(eid){
   }else{
     const read=tab==='read',gl=groupNames();
     f.innerHTML=`${bar(eid?'Edit book':read?'Book I read':'Book to read')}<div class="fb">
-      <label>Title</label><input name="title" required value="${esc(it.title)}">
+      <label>Title</label><input name="title" required value="${esc(it.title)}"><input type="hidden" name="cover" value="${esc(it.cover)}">
       <div class="row"><div style="flex:3"><label>Author</label><input name="author" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
       <label>Recommended by</label><input name="by" value="${esc(it.by)}">
       <label>Category</label><div class="seg" data-f="cat">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${it.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
@@ -189,7 +195,11 @@ function edit(eid){
   const drawChips=()=>{if(!chips)return;const gs=st.cat?GENRES[st.cat]:[...GENRES['Fiction'],...GENRES['Non-fiction']];
     chips.innerHTML=gs.map(g=>`<button type="button" class="${gi.value===g?'on':''}">${g}</button>`).join('');
     chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{const g=b.textContent;gi.value=gi.value===g?'':g;if(gi.value&&catOf(g)!==st.cat){st.cat=catOf(g);f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))}drawChips()})};
-  if(chips){gi.oninput=drawChips;f.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',drawChips));drawChips()}
+  if(chips){gi.oninput=drawChips;f.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',drawChips));drawChips()
+    const fv=n=>f.querySelector(`[name=${n}]`);
+    bookAC(fv('title'),b=>{fv('title').value=b.title;fv('author').value=b.author;if(!fv('pages').value&&b.pages)fv('pages').value=b.pages;fv('cover').value=b.cover;
+      if(!st.cat&&b.cat)st.cat=b.cat;if(!gi.value&&b.genre&&catOf(b.genre)===st.cat)gi.value=b.genre;
+      f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat));drawChips()})}
   const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups'){o.cat=st.cat;if(tab==='read')o.rating=st.rating}return o};
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();close();render()}};
@@ -213,9 +223,33 @@ $('#dev').onclick=()=>shareLib();
 $('#imp').onclick=()=>$('#impf').click();
 $('#impf').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!d.read||!d.want)throw 0;if(confirm('Replace everything here with this backup?')){db={groups:[],...d};save();render()}}catch{alert('That file isn’t a books backup.')}e.target.value=''};
 
+// ---------- Goodreads import (their library export CSV) ----------
+function parseCSV(s){const rows=[];let row=[],v='',q=false;s=s.replace(/^﻿/,'');
+  for(let i=0;i<s.length;i++){const c=s[i];
+    if(q){if(c==='"'){if(s[i+1]==='"'){v+='"';i++}else q=false}else v+=c}
+    else if(c==='"')q=true;else if(c===','){row.push(v);v=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&s[i+1]==='\n')i++;row.push(v);rows.push(row);row=[];v=''}else v+=c}
+  if(v||row.length){row.push(v);rows.push(row)}return rows}
+const grText=h=>h.replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').replace(/&(amp|lt|gt|quot|#39);/g,(m,e)=>({amp:'&',lt:'<',gt:'>',quot:'"','#39':"'"}[e])).trim();
+$('#gr').onclick=()=>$('#grf').click();
+$('#grf').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;
+  const rows=parseCSV(await file.text()),H=rows.shift()||[],col=n=>H.indexOf(n);
+  if(col('Title')<0||col('Exclusive Shelf')<0)return alert('That isn’t a Goodreads export. In Goodreads: My Books → Import and export → Export library.');
+  const g=(r,n)=>(r[col(n)]||'').replace(/^="?(.*?)"?$/,'$1').trim(),key=b=>(b.title+'\u0001'+(b.author||'')).trim().toLowerCase().replace(/\s+/g,' ');
+  const seen={read:new Set(db.read.map(key)),want:new Set(db.want.map(key))},add={read:[],want:[]};let dup=0;
+  rows.forEach((r,i)=>{const title=g(r,'Title');if(!title)return;
+    const L=g(r,'Exclusive Shelf')==='read'?'read':'want',d=g(r,'Date Read').replace(/\//g,'-'),pg=parseInt(g(r,'Number of Pages')),rt=parseInt(g(r,'My Rating'))||0,da=Date.parse(g(r,'Date Added').replace(/\//g,'-'));
+    const b={title,author:g(r,'Author').replace(/\s+/g,' '),pages:pg>0&&pg<=10000?pg:'',by:'',...guessGenre(g(r,'Bookshelves').split(/,\s*/)),group:'',reviewText:grText(g(r,'My Review')),review:'',notes:'',id:id()+i.toString(36),added:isNaN(da)?Date.now()-i:da};
+    if(L==='read'){b.date=/^\d{4}-\d{2}-\d{2}$/.test(d)?d:'';b.rating=rt>=1&&rt<=5?rt:0}
+    if(seen[L].has(key(b)))return dup++;seen[L].add(key(b));add[L].push(b)});
+  const n=add.read.length,m=add.want.length;
+  if(!n&&!m)return alert(dup?'All of these books are already here.':'No books found in that file.');
+  if(!confirm(`Import ${n} read and ${m} to-read book${n+m===1?'':'s'}?${dup?` (${dup} already here will be skipped.)`:''}`))return;
+  db.read.push(...add.read);db.want.push(...add.want);save();render();msg(`Imported ${n+m} book${n+m===1?'':'s'}.`)};
+
 // ---------- shared book groups ----------
 const gByName=n=>db.groups.find(g=>g.name&&g.name===n);
-const toShared=b=>({title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',by:'Carol',rec:b.by||'',review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:b.reviewText,notes:b.notes});
+const toShared=b=>({title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',cover:b.cover||'',by:'Carol',rec:b.by||'',review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:(b.reviewText||'').slice(0,1000),notes:(b.notes||'').slice(0,2000)});
 // Push one of Carol's books to its shared group (create or update). Never throws.
 async function pushBook(b,quiet){
   const g=b&&b.group&&gByName(b.group);if(!g||!g.token)return true;
@@ -265,13 +299,13 @@ function groupView(g){
   const have=b=>[...db.want,...db.read].some(x=>x.sid===b.id||(x.title||'').trim().toLowerCase()===b.title.trim().toLowerCase()&&(x.author||'').trim().toLowerCase()===(b.author||'').trim().toLowerCase());
   const draw=books=>{books.sort((a,b)=>b.added-a.added);
     st.textContent=`${books.length} shared book${books.length===1?'':'s'}`;
-    gl.innerHTML=books.length?books.map(b=>`<div class="card"><div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
+    gl.innerHTML=books.length?books.map(b=>`<div class="card${coverImg(b)?' hc':''}">${coverImg(b)}<div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
       <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.rec?`<span class="pill">rec. by ${esc(b.rec)}</span>`:''}${b.by?`<span class="pill">added by ${esc(b.by)}</span>`:''}</div>
       ${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
       <div class="gact">${have(b)?'<button type="button" class="sbtn" disabled>✓ In your lists</button>':`<button type="button" class="sbtn pri" data-sid="${esc(b.id)}">Add to Want to read</button>`}</div></div>`).join('')
       :`<div class="empty">No shared books yet.<br>Books you save with this group, and ones friends add from the link, show up here.</div>`;
     gl.querySelectorAll('[data-sid]').forEach(btn=>btn.onclick=()=>{const b=books.find(x=>x.id===btn.dataset.sid);
-      db.want.push({title:b.title,author:b.author,cat:b.cat,genre:b.genre,pages:b.pages,by:b.rec||b.by,group:g.name,review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
+      db.want.push({title:b.title,author:b.author,cover:b.cover,cat:b.cat,genre:b.genre,pages:b.pages,by:b.rec||b.by,group:g.name,review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
       save();btn.disabled=true;btn.classList.remove('pri');btn.textContent='✓ Added to Want to read'})};
   api('GET',`/groups/${g.token}`).then(d=>draw(d.books)).catch(e=>{st.textContent=e.status===404?'This shared list no longer exists.':'Couldn’t load the shared list — check your connection.'});
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;
