@@ -108,7 +108,7 @@
 
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
-<script src="common.js?v=20261107f"></script>
+<script src="common.js?v=20261107g"></script>
 
 <script>
 const KEY='carol-books-v1';
@@ -152,15 +152,20 @@ function render(){
         </div>
         ${aboutHtml(b)}${reviewHtml(b)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
+        ${tab==='want'?'<div class="gact"><button type="button" class="mkr">✓ Mark as read</button></div>':''}
       </div>`).join(''):`<div class="empty">${n?'Nothing matches.':tab==='read'?'No books yet.<br>Tap + to add one you’ve read.':'No books yet.<br>Tap + to add a recommendation.'}</div>`);
   }
   L.querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName==='A')return;
     const g=tab==='groups'&&db.groups.find(x=>x.id===el.dataset.id);
     if(g&&e.target.closest('.share'))return shareGroup(g);
     if(g&&g.token)return groupView(g);
+    if(tab==='want'&&e.target.closest('.mkr'))return markRead(el.dataset.id);
     edit(el.dataset.id)});
 }
 
+// Want → Read: move the book, date it today, then open it so she can rate it / adjust the date.
+function markRead(bid,o){const b=o||db.want.find(x=>x.id===bid);if(!b)return;db.want=db.want.filter(x=>x.id!==bid);
+  const r={...b,date:b.date||today()};db.read.push(r);save();pushBook(r);document.querySelector('[data-tab=read]').click();edit(r.id)}
 const bar=t=>`<div class="bar"><button type="button" class="cx">Cancel</button><h2>${esc(t)}</h2><button class="pri">Save</button></div>`;
 const close=()=>$('#dlg').close();
 $('#dlg').addEventListener('close',()=>document.documentElement.classList.remove('modal'));
@@ -200,7 +205,7 @@ function edit(eid){
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();close();render()}};
   const shr=f.querySelector('.shr');if(shr)shr.onclick=()=>shareGroup(it);
-  const mv=f.querySelector('.mv');if(mv)mv.onclick=()=>{const o=collect();db.want=db.want.filter(x=>x.id!==eid);o.date=today();db.read.push(o);save();pushBook(o);close();document.querySelector('[data-tab=read]').click();edit(o.id)};
+  const mv=f.querySelector('.mv');if(mv)mv.onclick=()=>{const o=collect();close();markRead(eid,o)};
   f.onsubmit=e=>{e.preventDefault();if(!f.reportValidity())return;const o=collect();
     let rec=it;
     if(tab==='groups'){if(eid&&it.name!==o.name)renameGroup(it,o.name)}
