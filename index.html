@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Books">
+<meta name="theme-color" content="#f6f1e7">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<title>Carol's Books</title>
+<style>
+  :root{--bg:#f6f1e7;--card:#fffdf8;--ink:#2b2420;--mute:#8a7f74;--line:#e6ddcf;--acc:#8c3b2e;--acc2:#2f5d50}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(12px + env(safe-area-inset-top)) 16px 8px;border-bottom:1px solid var(--line)}
+  h1{font:600 26px Georgia,"Times New Roman",serif;margin:0 0 8px}
+  .tabs{display:flex;gap:6px}
+  .tabs button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:9px 4px;border-radius:10px;font-size:15px}
+  .tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tools{display:flex;gap:8px;margin-top:8px}
+  .tools input,.tools select{flex:1;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:16px;color:var(--ink)}
+  .tools select{flex:0 0 auto}
+  main{padding:12px 16px}
+  .count{color:var(--mute);font-size:14px;margin:4px 2px 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .card .t{font:600 18px Georgia,serif}
+  .card .a{color:var(--mute);font-size:15px}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .pill{font-size:13px;padding:3px 9px;border-radius:99px;background:#efe7d8}
+  .pill.f{background:#f3e0dc;color:var(--acc)} .pill.n{background:#dde9e4;color:var(--acc2)}
+  .stars{color:#c08a1e;letter-spacing:1px}
+  .note{margin-top:8px;font-size:15px;white-space:pre-wrap}
+  .note a{color:var(--acc2);word-break:break-all}
+  .empty{text-align:center;color:var(--mute);padding:40px 10px}
+  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;border:0;background:var(--acc);color:#fff;font-size:34px;line-height:60px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+  dialog{border:0;border-radius:18px;padding:0;width:min(560px,94vw);max-height:90vh;background:var(--card);color:var(--ink)}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  form{padding:16px}
+  form h2{margin:0 0 12px;font:600 21px Georgia,serif}
+  label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+  form input,form select,form textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:#fff;color:var(--ink);font-family:inherit}
+  textarea{min-height:70px}
+  .row{display:flex;gap:10px}.row>div{flex:1;min-width:0}
+  .seg{display:flex;gap:6px}.seg button{flex:1;padding:9px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:15px;color:var(--ink)}
+  .seg button.on{background:var(--ink);color:#fff}
+  .rate button{font-size:28px;background:none;border:0;color:#d8cbb4;padding:0 3px}.rate button.on{color:#c08a1e}
+  .btns{display:flex;gap:8px;margin-top:16px}
+  .btns button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:16px;color:var(--ink)}
+  .btns .pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .btns .del{color:#b3261e;flex:0 0 auto}
+  .small{font-size:13px;color:var(--mute);text-align:center;margin:24px 0 6px}
+  .small button{background:none;border:0;color:var(--acc2);font-size:13px;text-decoration:underline;padding:4px 8px}
+  .group{margin-bottom:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Carol's Books</h1>
+  <div class="tabs">
+    <button data-tab="read" class="on">Read</button>
+    <button data-tab="want">Want to read</button>
+    <button data-tab="groups">Groups</button>
+  </div>
+  <div class="tools" id="tools">
+    <input id="q" type="search" placeholder="Search title, author, person…">
+    <select id="cat"><option value="">All</option><option value="Fiction">Fiction</option><option value="Non-fiction">Non-fiction</option></select>
+  </div>
+</header>
+<main id="list"></main>
+<div class="small">
+  <button id="exp">Back up</button>·<button id="imp">Restore</button>
+  <input id="impf" type="file" accept=".json,application/json" hidden>
+</div>
+<button class="fab" id="add" aria-label="Add">+</button>
+
+<dialog id="dlg"><form id="f" method="dialog"></form></dialog>
+
+<script>
+const KEY='carol-books-v1';
+let db=JSON.parse(localStorage.getItem(KEY)||'null')||{read:[],want:[],groups:[]};
+let tab='read';
+const $=s=>document.querySelector(s);
+const save=()=>localStorage.setItem(KEY,JSON.stringify(db));
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const link=s=>esc(s).replace(/(https?:\/\/[^\s]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+const id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fmtDate=d=>{if(!d)return'';const[y,m]=d.split('-');return m?new Date(y,m-1).toLocaleString(undefined,{month:'short',year:'numeric'}):y};
+const groupNames=()=>db.groups.map(g=>g.name).filter(Boolean);
+
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));$('#tools').style.display=tab==='groups'?'none':'flex';render()});
+$('#q').oninput=render;$('#cat').onchange=render;
+$('#add').onclick=()=>edit(null);
+
+function render(){
+  const L=$('#list');
+  if(tab==='groups'){
+    L.innerHTML=db.groups.length?db.groups.map(g=>{
+      const recs=db.want.filter(b=>b.group===g.name).length+db.read.filter(b=>b.group===g.name).length;
+      return `<div class="card" data-id="${g.id}"><div class="t">${esc(g.name)}</div>${g.members?`<div class="a">${esc(g.members)}</div>`:''}<div class="meta">${g.meets?`<span class="pill">${esc(g.meets)}</span>`:''}<span class="pill">${recs} book${recs===1?'':'s'}</span></div>${g.notes?`<div class="note">${link(g.notes)}</div>`:''}</div>`}).join('')
+      :`<div class="empty">No book groups yet.<br>Tap + to add one.</div>`;
+  }else{
+    const q=$('#q').value.toLowerCase(),c=$('#cat').value;
+    let items=db[tab].filter(b=>(!c||b.cat===c)&&(!q||[b.title,b.author,b.by,b.group,b.genre,b.notes].join(' ').toLowerCase().includes(q)));
+    items.sort(tab==='read'?(a,b)=>(b.date||'').localeCompare(a.date||''):(a,b)=>(b.added||0)-(a.added||0));
+    const n=db[tab].length;
+    L.innerHTML=`<div class="count">${items.length}${items.length!==n?' of '+n:''} book${n===1?'':'s'}</div>`+(items.length?items.map(b=>`
+      <div class="card" data-id="${b.id}">
+        <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
+        <div class="meta">
+          ${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${b.cat}</span>`:''}
+          ${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}
+          ${tab==='read'&&b.date?`<span class="pill">${fmtDate(b.date)}</span>`:''}
+          ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
+          ${b.by?`<span class="pill">from ${esc(b.by)}</span>`:''}
+          ${b.group?`<span class="pill">${esc(b.group)}</span>`:''}
+        </div>
+        ${b.review?`<div class="note"><a href="${esc(b.review)}" target="_blank" rel="noopener">Review ↗</a></div>`:''}
+        ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
+      </div>`).join(''):`<div class="empty">${n?'Nothing matches.':tab==='read'?'No books yet.<br>Tap + to add one you’ve read.':'No books yet.<br>Tap + to add a recommendation.'}</div>`);
+  }
+  L.querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName!=='A')edit(el.dataset.id)});
+}
+
+function edit(eid){
+  const f=$('#f'),list=db[tab],it=eid?list.find(x=>x.id===eid):{};
+  if(tab==='groups'){
+    f.innerHTML=`<h2>${eid?'Edit':'New'} book group</h2>
+      <label>Name</label><input name="name" required value="${esc(it.name)}">
+      <label>Members</label><input name="members" value="${esc(it.members)}" placeholder="Sue, Linda, Mark…">
+      <label>When it meets</label><input name="meets" value="${esc(it.meets)}" placeholder="2nd Tuesday">
+      <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
+  }else{
+    const read=tab==='read',gl=groupNames();
+    f.innerHTML=`<h2>${eid?'Edit book':read?'Book I read':'Book to read'}</h2>
+      <label>Title</label><input name="title" required value="${esc(it.title)}">
+      <label>Author</label><input name="author" value="${esc(it.author)}">
+      <label>Category</label><div class="seg" data-f="cat">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${it.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
+      <label>Genre</label><input name="genre" value="${esc(it.genre)}" placeholder="Mystery, memoir, history…">
+      ${read?`<label>When I read it</label><input name="date" type="month" value="${esc(it.date)}">
+      <label>My rating</label><div class="rate">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" class="${(it.rating||0)>=n?'on':''}">★</button>`).join('')}</div>`:''}
+      <div class="row"><div><label>Recommended by</label><input name="by" value="${esc(it.by)}"></div>
+      <div><label>Book group</label><input name="group" list="gl" value="${esc(it.group)}"><datalist id="gl">${gl.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div></div>
+      <label>Review link</label><input name="review" type="url" inputmode="url" value="${esc(it.review)}" placeholder="https://…">
+      <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
+  }
+  const st={cat:it.cat||'',rating:it.rating||0};
+  f.innerHTML+=`<div class="btns">${eid?'<button type="button" class="del">Delete</button>':''}${eid&&tab==='want'?'<button type="button" class="mv">Mark read</button>':''}<button type="button" class="cx">Cancel</button><button class="pri">Save</button></div>`;
+  f.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{st.cat=b.classList.contains('on')?'':b.dataset.v;f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))});
+  f.querySelectorAll('.rate button').forEach(b=>b.onclick=()=>{const n=+b.dataset.n;st.rating=st.rating===n?0:n;f.querySelectorAll('.rate button').forEach(x=>x.classList.toggle('on',+x.dataset.n<=st.rating))});
+  const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups'){o.cat=st.cat;if(tab==='read')o.rating=st.rating}return o};
+  f.querySelector('.cx').onclick=()=>$('#dlg').close();
+  const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();$('#dlg').close();render()}};
+  const mv=f.querySelector('.mv');if(mv)mv.onclick=()=>{const o=collect();db.want=db.want.filter(x=>x.id!==eid);o.date=new Date().toISOString().slice(0,7);db.read.push(o);save();$('#dlg').close();document.querySelector('[data-tab=read]').click();edit(o.id)};
+  f.onsubmit=e=>{e.preventDefault();if(!f.reportValidity())return;const o=collect();
+    if(eid)Object.assign(it,o);else list.push({...o,id:id(),added:Date.now()});
+    save();$('#dlg').close();render()};
+  $('#dlg').showModal();
+}
+
+$('#exp').onclick=async()=>{
+  const blob=new Blob([JSON.stringify(db,null,1)],{type:'application/json'}),name=`books-backup-${new Date().toISOString().slice(0,10)}.json`;
+  const file=new File([blob],name,{type:'application/json'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:name});return}catch(e){if(e.name==='AbortError')return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();
+};
+$('#imp').onclick=()=>$('#impf').click();
+$('#impf').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!d.read||!d.want)throw 0;if(confirm('Replace everything here with this backup?')){db={groups:[],...d};save();render()}}catch{alert('That file isn’t a books backup.')}e.target.value=''};
+render();
+</script>
+</body>
+</html>
