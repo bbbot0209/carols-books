@@ -108,7 +108,7 @@
 
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
-<script src="common.js?v=20261107c"></script>
+<script src="common.js?v=20261107d"></script>
 
 <script>
 const KEY='carol-books-v1';
@@ -180,8 +180,7 @@ function edit(eid){
       <div class="row"><div style="flex:3"><label>Author</label><input name="author" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
       <label>Year published</label><input name="year" inputmode="numeric" maxlength="4" value="${esc(it.year)}">
       <div class="row"><div style="flex:3"><label>Recommended by</label><input name="by" value="${esc(it.by)}"></div><div style="flex:2"><label>Date recommended</label><input name="dateRec" type="date" value="${esc(it.dateRec??(!eid&&!read?today():''))}"></div></div>
-      <label>Category</label><div class="seg" data-f="cat">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${it.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
-      <label>Genre</label><div class="chips"></div><input name="genre" value="${esc(it.genre)}" placeholder="Or type your own">
+      <div class="row"><div><label>Category</label><input name="cat" value="${esc(it.cat)}" placeholder="Fills in automatically"></div><div style="flex:2"><label>Genre</label><input name="genre" value="${esc(it.genre)}" placeholder="Fills in automatically"></div></div>
       ${read?`<label>Date read</label><input name="date" type="date" value="${esc(/^\d{4}-\d{2}$/.test(it.date||'')?it.date+'-01':it.date)}">
       <label>My rating</label><div class="rate">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" class="${(it.rating||0)>=n?'on':''}">★</button>`).join('')}</div>`:''}
       <label>Book group</label><input name="group" list="gl" value="${esc(it.group)}"><datalist id="gl">${gl.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
@@ -190,21 +189,15 @@ function edit(eid){
       <label>Review link</label><input name="review" type="url" inputmode="url" value="${esc(it.review)}" placeholder="https://…">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
   }
-  const st={cat:it.cat||'',rating:it.rating||0};
+  const st={rating:it.rating||0};
   f.innerHTML+=(eid?`<div class="btns">${tab==='want'?'<button type="button" class="mv">Mark read</button>':''}${tab==='groups'?'<button type="button" class="shr">Share link</button>':''}<button type="button" class="del">Delete</button></div>`:'')+'</div>';
   f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
-  f.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{st.cat=b.classList.contains('on')?'':b.dataset.v;f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))});
   f.querySelectorAll('.rate button').forEach(b=>b.onclick=()=>{const n=+b.dataset.n;st.rating=st.rating===n?0:n;f.querySelectorAll('.rate button').forEach(x=>x.classList.toggle('on',+x.dataset.n<=st.rating))});
-  const chips=f.querySelector('.chips'),gi=f.querySelector('[name=genre]');
-  const drawChips=()=>{if(!chips)return;const gs=st.cat?GENRES[st.cat]:[...GENRES['Fiction'],...GENRES['Non-fiction']];
-    chips.innerHTML=gs.map(g=>`<button type="button" class="${gi.value===g?'on':''}">${g}</button>`).join('');
-    chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{const g=b.textContent;gi.value=gi.value===g?'':g;if(gi.value&&catOf(g)!==st.cat){st.cat=catOf(g);f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))}drawChips()})};
-  if(chips){gi.oninput=drawChips;f.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',drawChips));drawChips()
-    const fv=n=>f.querySelector(`[name=${n}]`);
-    const applyCat=b=>{if(!st.cat&&b.cat)st.cat=b.cat;if(!gi.value&&b.genre&&catOf(b.genre)===st.cat)gi.value=b.genre;
-      f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat));drawChips()};
+  const gi=f.querySelector('[name=genre]'),ci=f.querySelector('[name=cat]');
+  if(ci){const fv=n=>f.querySelector(`[name=${n}]`);
+    const applyCat=b=>{if(!ci.value&&b.cat)ci.value=b.cat;if(!gi.value&&b.genre)gi.value=b.genre};
     bookAC(fv('title'),b=>{fillPicked(f,b,applyCat);applyCat(b)})}
-  const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups'){o.cat=st.cat;if(tab==='read')o.rating=st.rating}return o};
+  const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups')o.cat=normCat(o.cat);if(tab==='read')o.rating=st.rating;return o};
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();close();render()}};
   const shr=f.querySelector('.shr');if(shr)shr.onclick=()=>shareGroup(it);

@@ -79,7 +79,7 @@
 <main id="list"><div class="count">Loading…</div></main>
 <button class="fab" id="add" aria-label="Add a book" hidden>+</button>
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
-<script src="common.js?v=20261107c"></script>
+<script src="common.js?v=20261107d"></script>
 <script>
 const LKEY='carol-books-group';
 const me=JSON.parse(localStorage.getItem(LKEY)||'null')||{name:'',mine:{}};
@@ -111,14 +111,13 @@ function render(){
 const close=()=>$('#dlg').close();
 $('#dlg').addEventListener('close',()=>document.documentElement.classList.remove('modal'));
 function edit(eid){
-  const f=$('#f'),it=eid?books.find(b=>b.id===eid)||{}:{},st={cat:it.cat||''};
+  const f=$('#f'),it=eid?books.find(b=>b.id===eid)||{}:{};
   f.innerHTML=`<div class="bar"><button type="button" class="cx">Cancel</button><h2>${eid?'Edit book':'Share a book'}</h2><button class="pri">Save</button></div><div class="fb">
     <label>Title</label><input name="title" required maxlength="200" value="${esc(it.title)}"><input type="hidden" name="cover" value="${esc(it.cover)}">
     <div class="row"><div style="flex:3"><label>Author</label><input name="author" maxlength="200" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
       <label>Year published</label><input name="year" inputmode="numeric" maxlength="4" value="${esc(it.year)}">
     <div class="row"><div style="flex:3"><label>Recommended by</label><input name="rec" maxlength="60" value="${esc(it.rec)}"></div><div style="flex:2"><label>Date recommended</label><input name="dateRec" type="date" value="${esc(it.dateRec??(eid?'':new Date().toLocaleDateString('en-CA')))}"></div></div>
-    <label>Category</label><div class="seg">${['Fiction','Non-fiction'].map(v=>`<button type="button" class="${st.cat===v?'on':''}" data-v="${v}">${v}</button>`).join('')}</div>
-    <label>Genre</label><div class="chips"></div><input name="genre" maxlength="60" value="${esc(it.genre)}" placeholder="Or type your own">
+    <div class="row"><div><label>Category</label><input name="cat" maxlength="20" value="${esc(it.cat)}" placeholder="Fills in automatically"></div><div style="flex:2"><label>Genre</label><input name="genre" maxlength="60" value="${esc(it.genre)}" placeholder="Fills in automatically"></div></div>
     <label>Added by (your name)</label><input name="by" required maxlength="60" value="${esc(eid?it.by:me.name)}">
     <label>About the book</label><textarea name="about" maxlength="2000" placeholder="Fills in when you pick a suggested title">${esc(it.about)}</textarea>
     <label>Review</label><textarea name="reviewText" maxlength="1000" placeholder="Where it’s from / what it said — e.g. NYT: “a quiet masterpiece”">${esc(it.reviewText)}</textarea>
@@ -127,15 +126,9 @@ function edit(eid){
     <div class="err"></div>
     ${eid?'<div class="btns"><button type="button" class="del">Delete</button></div>':''}</div>`;
   f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
-  const chips=f.querySelector('.chips'),gi=f.querySelector('[name=genre]'),segs=f.querySelectorAll('.seg button'),errEl=f.querySelector('.err');
-  const setCat=c=>{st.cat=c;segs.forEach(x=>x.classList.toggle('on',x.dataset.v===c))};
-  const drawChips=()=>{const gs=st.cat?GENRES[st.cat]:[...GENRES['Fiction'],...GENRES['Non-fiction']];
-    chips.innerHTML=gs.map(g=>`<button type="button" class="${gi.value===g?'on':''}">${g}</button>`).join('');
-    chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{const g=b.textContent;gi.value=gi.value===g?'':g;if(gi.value&&catOf(g)!==st.cat)setCat(catOf(g));drawChips()})};
-  segs.forEach(b=>b.onclick=()=>{setCat(b.classList.contains('on')?'':b.dataset.v);drawChips()});
-  gi.oninput=drawChips;drawChips();
+  const gi=f.querySelector('[name=genre]'),ci=f.querySelector('[name=cat]'),errEl=f.querySelector('.err');
   const fv=n=>f.querySelector(`[name=${n}]`);
-  const applyCat=b=>{if(!st.cat&&b.cat)setCat(b.cat);if(!gi.value&&b.genre&&catOf(b.genre)===st.cat)gi.value=b.genre;drawChips()};
+  const applyCat=b=>{if(!ci.value&&b.cat)ci.value=b.cat;if(!gi.value&&b.genre)gi.value=b.genre};
   bookAC(fv('title'),b=>{fillPicked(f,b,applyCat);applyCat(b)});
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');
@@ -143,7 +136,7 @@ function edit(eid){
     try{await api('DELETE',`/groups/${tok}/books/${eid}`);books=books.filter(b=>b.id!==eid);me.mine[tok]=mine().filter(x=>x!==eid);saveMe();close();render()}
     catch(e){errEl.textContent=e.status===404?'Already removed.':'Couldn’t delete — check your connection.';if(e.status===404){close();load()}}};
   f.onsubmit=async e=>{e.preventDefault();if(!f.reportValidity())return;
-    const o={...Object.fromEntries(new FormData(f)),cat:st.cat};me.name=o.by.trim();saveMe();
+    const o=Object.fromEntries(new FormData(f));o.cat=normCat(o.cat);me.name=o.by.trim();saveMe();
     const sv=f.querySelector('.bar .pri');sv.disabled=true;errEl.textContent='';
     try{
       if(eid){const b=await api('PUT',`/groups/${tok}/books/${eid}`,o);books=books.map(x=>x.id===eid?b:x)}
