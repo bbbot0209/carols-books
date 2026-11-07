@@ -90,7 +90,16 @@ const fmtDay=d=>{const[y,m,dd]=(d||'').split('-');return y&&m&&dd?new Date(y,m-1
 const coverImg=b=>/^https:\/\/covers\.openlibrary\.org\/\S+$/.test(b.cover||'')?`<img class="cv" src="${esc(b.cover)}" alt="" loading="lazy" onerror="this.remove()">`:'';
 
 // Fill a book form from a picked suggestion: title/author always, the rest only into empty fields.
-function fillPicked(f,b){const fv=n=>f.querySelector(`[name=${n}]`),set=(n,v)=>{const el=fv(n);if(el&&v&&!el.value)el.value=v};
+// Apple Books (keyless, CORS-open) backs up Open Library's thin records for new releases: year, genres, blurb.
+const appleBook=async(title,author)=>{try{const last=olNorm(author).split(' ').pop()||'',t=olNorm(title);
+  const r=(await (await fetch('https://itunes.apple.com/search?media=ebook&limit=10&term='+encodeURIComponent(title+' '+author))).json()).results||[];
+  const x=r.find(x=>olNorm(x.trackName).replace(/ a novel$/,'')===t&&olNorm(x.artistName).includes(last))||r.find(x=>olNorm(x.trackName).startsWith(t)&&olNorm(x.artistName).includes(last));
+  if(!x)return{};const d=document.createElement('div');d.innerHTML=(x.description||'').replace(/<br\s*\/?>/gi,'\n');
+  return{year:(x.releaseDate||'').slice(0,4),genres:x.genres||[],about:d.textContent.trim().slice(0,2000)}}catch{return{}}};
+// onCat(b) re-applies category/genre when they arrive late (from Apple Books).
+function fillPicked(f,b,onCat){const fv=n=>f.querySelector(`[name=${n}]`),set=(n,v)=>{const el=fv(n);if(el&&v&&!el.value)el.value=v};
   fv('title').value=b.title;fv('author').value=b.author;fv('cover').value=b.cover;set('pages',b.pages);set('year',b.year);
-  if(!fv('about').value)olAbout(b.key).then(a=>set('about',a));
-  olEdition(b.key).then(e=>{set('pages',e.pages);set('publisher',e.publisher);set('year',e.year)})}
+  const ap=appleBook(b.title,b.author);
+  if(!fv('about').value)olAbout(b.key).then(a=>a||ap.then(x=>x.about)).then(a=>set('about',a));
+  olEdition(b.key).then(e=>{set('pages',e.pages);set('publisher',e.publisher);set('year',e.year);
+    return ap}).then(x=>{set('year',x.year);if(!b.cat&&onCat&&x.genres){const g=guessGenre(x.genres);if(g.cat)onCat(g)}})}

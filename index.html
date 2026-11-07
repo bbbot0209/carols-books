@@ -201,9 +201,9 @@ function edit(eid){
     chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{const g=b.textContent;gi.value=gi.value===g?'':g;if(gi.value&&catOf(g)!==st.cat){st.cat=catOf(g);f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat))}drawChips()})};
   if(chips){gi.oninput=drawChips;f.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',drawChips));drawChips()
     const fv=n=>f.querySelector(`[name=${n}]`);
-    bookAC(fv('title'),b=>{fillPicked(f,b);
-      if(!st.cat&&b.cat)st.cat=b.cat;if(!gi.value&&b.genre&&catOf(b.genre)===st.cat)gi.value=b.genre;
-      f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat));drawChips()})}
+    const applyCat=b=>{if(!st.cat&&b.cat)st.cat=b.cat;if(!gi.value&&b.genre&&catOf(b.genre)===st.cat)gi.value=b.genre;
+      f.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.cat));drawChips()};
+    bookAC(fv('title'),b=>{fillPicked(f,b,applyCat);applyCat(b)})}
   const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(tab!=='groups'){o.cat=st.cat;if(tab==='read')o.rating=st.rating}return o};
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){db[tab]=list.filter(x=>x.id!==eid);save();close();render()}};

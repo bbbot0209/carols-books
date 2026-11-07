@@ -135,8 +135,8 @@ function edit(eid){
   segs.forEach(b=>b.onclick=()=>{setCat(b.classList.contains('on')?'':b.dataset.v);drawChips()});
   gi.oninput=drawChips;drawChips();
   const fv=n=>f.querySelector(`[name=${n}]`);
-  bookAC(fv('title'),b=>{fillPicked(f,b);
-    if(!st.cat&&b.cat)setCat(b.cat);if(!gi.value&&b.genre&&catOf(b.genre)===st.cat)gi.value=b.genre;drawChips()});
+  const applyCat=b=>{if(!st.cat&&b.cat)setCat(b.cat);if(!gi.value&&b.genre&&catOf(b.genre)===st.cat)gi.value=b.genre;drawChips()};
+  bookAC(fv('title'),b=>{fillPicked(f,b,applyCat);applyCat(b)});
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');
   if(del)del.onclick=async()=>{if(!confirm('Remove this book from the group list?'))return;
