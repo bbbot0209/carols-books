@@ -69,6 +69,8 @@
   .gact button.pri,.sbtn.pri{background:var(--acc2);color:#fff;border-color:var(--acc2)}
   .sbtn:disabled{color:var(--mute);background:none}
   .pill.sh{background:#dde9e4;color:var(--acc2)}
+  .pill.sr{background:#dde9e4;color:var(--acc2);font-weight:600} .pill.sw{background:#fbeccd;color:#8a5a00;font-weight:600}
+  .empty .addq{margin-top:14px;font:inherit;font-size:16px;padding:10px 16px;border-radius:12px;border:0;background:var(--acc);color:#fff}
   .rv{font-style:italic}.rv a{color:var(--acc2)}
   .status{color:var(--mute);font-size:14px;margin:12px 2px}
   #msg{position:fixed;left:16px;right:90px;bottom:calc(26px + env(safe-area-inset-bottom));background:var(--ink);color:#fff;font-size:14px;padding:10px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:20}
@@ -150,7 +152,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108c"></script>
+<script src="common.js?v=20261108d"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -181,6 +183,7 @@ const BLANK={status:'',group:'',pubQ:'',pubY:'',recQ:'',recD:'',readQ:'',readD:'
 let view={...BLANK,...(JSON.parse(localStorage.getItem(VKEY)||'null')||{})},viewName='';
 const saveView=()=>localStorage.setItem(VKEY,JSON.stringify(view));
 const cmp=(v,q,x)=>q==='before'?v<x:q==='after'?v>x:(v===x||(x.startsWith(v+'-')));   // 'in'/'on'; old YYYY-MM dates match any day of that month
+const fold=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/['’]/g,'');
 function matches(b,v=view){
   if(v.status&&b.status!==v.status)return false;
   if(v.group&&b.group!==v.group)return false;
@@ -188,8 +191,11 @@ function matches(b,v=view){
   if(v.pubQ&&/^\d{3,4}$/.test(v.pubY)){const y=parseInt(b.year);if(!y||!(v.pubQ==='before'?y<+v.pubY:v.pubQ==='after'?y>+v.pubY:y===+v.pubY))return false}
   if(v.recQ&&v.recD){if(!b.dateRec||!cmp(b.dateRec,v.recQ,v.recD))return false}
   if(v.readQ&&v.readD){if(!b.date||!cmp(b.date,v.readQ,v.readD))return false}
-  const q=(v.q||'').toLowerCase();
-  return !q||[b.title,b.author,b.by,b.group,b.genre,b.notes,b.reviewText,b.about].join(' ').toLowerCase().includes(q);
+  // Search = every typed word starts a word in her own fields (title, author, recommended by, group, genre, notes).
+  // Not the auto-filled blurb, and not mid-word: "Land" must not match "island" in a description (Carol 11/8).
+  const qs=fold(v.q||'').split(/\s+/).filter(Boolean);if(!qs.length)return true;
+  const ws=fold([b.title,b.author,b.by,b.group,b.genre,b.notes].join(' ')).split(/[^a-z0-9]+/).filter(Boolean);
+  return qs.every(q=>ws.some(w=>w.startsWith(q.replace(/[^a-z0-9]/g,''))));
 }
 function describe(v=view){
   const p=[v.status?STL[v.status]:'All books'];
@@ -263,6 +269,7 @@ const cardHtml=(b,pr)=>`
       <div class="card${coverImg(b)?' hc':''}" data-id="${b.id}">${coverImg(b)}
         <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
         <div class="meta">
+          ${pr&&view.status?'':`<span class="pill ${b.status==='want'?'sw':'sr'}">${STL[b.status]}</span>`}
           ${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${b.cat}</span>`:''}
           ${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}
           ${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}
@@ -270,7 +277,6 @@ const cardHtml=(b,pr)=>`
           ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
           ${recPill({rec:b.by,dateRec:b.dateRec})}
           ${b.group?`<span class="pill">${esc(b.group)}</span>`:''}
-          ${pr&&!view.status?`<span class="pill">${STL[b.status]}</span>`:''}
         </div>
         ${aboutHtml(b)}${reviewHtml(b)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
@@ -286,12 +292,13 @@ function render(keepOpen,refocus){
   }else{
     const items=shown(),n=db.books.length;
     L.innerHTML=filterPanel()+`<div class="crow"><div class="count">${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}</div><button type="button" class="tgl">${disp.mode==='table'?'Cards':'Table'}</button>${items.length?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`+
-      (items.length?(disp.mode==='table'?tableHtml(items):items.map(b=>cardHtml(b)).join('')):`<div class="empty">${n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
+      (items.length?(disp.mode==='table'?tableHtml(items):items.map(b=>cardHtml(b)).join('')):`<div class="empty">${view.q?`None of your books match “${esc(view.q)}”.<br><button type="button" class="addq">Find “${esc(view.q)}” and add it</button>`:n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
     wireFilters(L);
     L.querySelector('.tgl').onclick=()=>{disp.mode=disp.mode==='table'?'cards':'table';saveDisp();render()};
     L.querySelectorAll('.bt th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;disp.dir=disp.k===k?-disp.dir:1;disp.k=k;saveDisp();
       const sx=L.querySelector('.tw').scrollLeft;render();L.querySelector('.tw').scrollLeft=sx});
     L.querySelectorAll('.bt tr[data-id]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;edit(tr.dataset.id)});
+    L.querySelector('.addq')?.addEventListener('click',()=>edit(null,{title:view.q.trim()}));
     L.querySelector('.prc')?.addEventListener('click',()=>printView(false));
     L.querySelector('.prt')?.addEventListener('click',()=>printView(true));
     if(refocus){const el=L.querySelector(refocus);if(el){el.focus();const v=el.value;el.value='';el.value=v}}
@@ -321,8 +328,8 @@ const bar=t=>`<div class="bar"><button type="button" class="cx">Cancel</button><
 const close=()=>$('#dlg').close();
 $('#dlg').addEventListener('close',()=>document.documentElement.classList.remove('modal'));
 $('#dlg').addEventListener('click',e=>{const r=$('#dlg').getBoundingClientRect();if(e.target===$('#dlg')&&(e.clientY<r.top||e.clientY>r.bottom||e.clientX<r.left||e.clientX>r.right))close()});
-function edit(eid){
-  const f=$('#f'),grp=mode==='groups',list=grp?db.groups:db.books,it=eid?list.find(x=>x.id===eid):{};
+function edit(eid,pre){
+  const f=$('#f'),grp=mode==='groups',list=grp?db.groups:db.books,it=eid?list.find(x=>x.id===eid):{...pre};
   if(!it)return;
   const st={rating:it.rating||0,status:it.status||(view.status||'read')};
   if(grp){
@@ -367,6 +374,8 @@ function edit(eid){
     if(eid)Object.assign(it,o);else list.push(rec={...o,id:id(),added:Date.now()});
     save();close();render();if(!grp)pushBook(rec)};
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;f.querySelector('.cx').focus({preventScroll:true});
+  // Opened from a search with no match: run the online title lookup straight away.
+  if(!eid&&pre&&pre.title){const ti=f.querySelector('[name=title]');ti.focus({preventScroll:true});ti.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))}
 }
 
 $('#exp').onclick=async()=>{
