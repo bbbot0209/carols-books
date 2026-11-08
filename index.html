@@ -118,6 +118,12 @@
   .bt td.nt{white-space:normal;min-width:180px;max-width:260px}
   .bt td a{color:var(--acc2)}.bt .stars{font-size:13px}
   .bt tr:active td{background:#f3ece0}
+  .crow .dsp{display:flex;gap:2px}.crow .dsp button{text-decoration:none;color:var(--ink);opacity:.55;padding:4px 5px}.crow .dsp button.on{opacity:1;font-weight:600;color:var(--acc2);text-decoration:underline}
+  .sh2{font:600 16px Georgia,serif;margin:14px 2px 6px}.sh2 span{font:400 13px system-ui,sans-serif;opacity:.65;margin-left:6px}
+  .sl{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
+  .sr1{display:flex;align-items:baseline;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap;cursor:pointer}
+  .sr1 b,.sr1 .m{overflow:hidden;text-overflow:ellipsis;min-width:0}.sr1 b{flex:0 1 auto;max-width:58%}.sr1 .m{flex:1 1 auto;opacity:.8;margin-left:4px}.sr1 .p{flex:none;margin-left:8px;opacity:.7}.sr1:last-child{border-bottom:0}.sr1:active{background:#f3ece0}
+  .sr1 b{font:600 13.5px Georgia,serif}
   #pv{display:none}
   @media print{
     body{background:#fff;padding:0;font-size:12pt}
@@ -128,6 +134,7 @@
     #pv .pill{background:none;border:1px solid #ccc}
     @page{margin:12mm}
     #pv .tw{overflow:visible;max-height:none;border:0}
+    #pv .sl{border:0;border-radius:0}#pv .sr1{padding:2pt 0;font-size:10pt;border-bottom:1px solid #ddd;break-inside:avoid}#pv .sr1 b{max-width:none}
     #pv table.bt{font-size:8.5pt;width:100%}
     #pv .bt th,#pv .bt td{position:static;white-space:normal;padding:3pt 4pt;border-bottom:1px solid #ccc;background:#fff;max-width:none;min-width:0}
     #pv .bt th{background:#eee}#pv .bt td:first-child{border-right:0;font-size:9pt}
@@ -153,7 +160,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108e"></script>
+<script src="common.js?v=20261108f"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -221,7 +228,12 @@ function sortBy(items){const c=COLS.find(c=>c[0]===disp.k);if(!c)return items;co
   const val=b=>{const v=b[k];return num?(parseFloat(v)||null):String(v??'').trim().toLowerCase()||null};
   return items.sort((a,b)=>{const x=val(a),y=val(b);if(x===null||y===null)return x===y?0:x===null?1:-1;   // blanks always last
     return (num?x-y:x.localeCompare(y))*disp.dir})}
-const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return disp.mode==='table'?sortBy(it):it};
+const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return disp.mode!=='cards'?sortBy(it):it};
+// Summary (Carol 11/8): just Title, Author, Category, Pages — split into Want to read / Read, each with its page total.
+const summaryHtml=(items,pr)=>['want','read'].map(st=>{const it=items.filter(b=>b.status===st);if(!it.length)return'';
+  const pgs=it.reduce((t,b)=>t+(parseInt(b.pages)||0),0);
+  return `<div class="sh2">${STL[st]} <span>${it.length} book${it.length===1?'':'s'}${pgs?` · ${pgs.toLocaleString()} pages`:''}</span></div><div class="sl">`+
+    it.map(b=>`<div class="sr1" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span class="m">${[b.author,b.cat].filter(Boolean).map(x=>` · ${esc(x)}`).join('')}</span><span class="p">${b.pages?esc(b.pages)+' p':''}</span></div>`).join('')+'</div>'}).join('');
 function cell(b,k,pr){const v=b[k];
   if(k==='status')return STL[v]||'';
   if(k==='date'||k==='dateRec')return v?fmtDate(v):'';
@@ -229,8 +241,8 @@ function cell(b,k,pr){const v=b[k];
   if(k==='review')return /^https?:\/\/\S+$/i.test(v||'')?(pr?esc(v.replace(/^https?:\/\/(www\.)?/i,'').split('/')[0]):`<a href="${esc(v)}" target="_blank" rel="noopener">Review ↗</a>`):'';
   if(k==='notes')return esc(!pr&&(v||'').length>90?v.slice(0,90).replace(/\s+\S*$/,'')+'…':v);
   return esc(v)}
-const tableHtml=(items,pr)=>`<div class="tw"><table class="bt"><thead><tr>${COLS.map(([k,l])=>`<th data-k="${k}"${!pr&&disp.k===k?' class="on"':''}>${l}${!pr&&disp.k===k?(disp.dir>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead>
-  <tbody>${items.map(b=>`<tr data-id="${esc(b.id)}">${COLS.map(([k])=>`<td${k==='notes'?' class="nt"':''}>${cell(b,k,pr)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+const tableHtml=(items,pr,cols=COLS)=>`<div class="tw"><table class="bt"><thead><tr>${cols.map(([k,l])=>`<th data-k="${k}"${!pr&&disp.k===k?' class="on"':''}>${l}${!pr&&disp.k===k?(disp.dir>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead>
+  <tbody>${items.map(b=>`<tr data-id="${esc(b.id)}">${cols.map(([k])=>`<td${k==='notes'?' class="nt"':''}>${cell(b,k,pr)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 function setView(v,name=''){view={...BLANK,...v};viewName=name;saveView();syncControls();render()}
 function syncControls(){
   $('#q').value=view.q||'';
@@ -292,12 +304,14 @@ function render(keepOpen,refocus){
       :`<div class="empty">No book groups yet.<br>Tap + to add one.</div>`;
   }else{
     const items=shown(),n=db.books.length;
-    L.innerHTML=filterPanel()+`<div class="crow"><div class="count">${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}</div><button type="button" class="tgl">${disp.mode==='table'?'Cards':'Table'}</button>${items.length?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`+
-      (items.length?(disp.mode==='table'?tableHtml(items):items.map(b=>cardHtml(b)).join('')):`<div class="empty">${view.q?`“${esc(view.q)}” isn’t in your books yet.<div class="olr ac"><div class="hint">Searching online…</div></div><button type="button" class="addq">Add “${esc(view.q)}” yourself</button>`:n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
+    L.innerHTML=filterPanel()+`<div class="crow"><div class="count">${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}</div><span class="dsp">${[['cards','Cards'],['table','Table'],['summary','Summary']].map(([m,l])=>`<button type="button" data-m="${m}"${disp.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${items.length?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`+
+      (items.length?(disp.mode==='table'?tableHtml(items):disp.mode==='summary'?summaryHtml(items):items.map(b=>cardHtml(b)).join('')):`<div class="empty">${view.q?`“${esc(view.q)}” isn’t in your books yet.<div class="olr ac"><div class="hint">Searching online…</div></div><button type="button" class="addq">Add “${esc(view.q)}” yourself</button>`:n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
     wireFilters(L);
-    L.querySelector('.tgl').onclick=()=>{disp.mode=disp.mode==='table'?'cards':'table';saveDisp();render()};
+    L.querySelectorAll('.dsp button').forEach(x=>x.onclick=()=>{disp.mode=x.dataset.m;saveDisp();render()});
     L.querySelectorAll('.bt th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;disp.dir=disp.k===k?-disp.dir:1;disp.k=k;saveDisp();
-      const sx=L.querySelector('.tw').scrollLeft;render();L.querySelector('.tw').scrollLeft=sx});
+      const i=[...L.querySelectorAll('.bt th')].indexOf(th),tw=th.closest('.tw'),j=[...L.querySelectorAll('.tw')].indexOf(tw),sx=tw.scrollLeft;
+      render();const t2=L.querySelectorAll('.tw')[j];if(t2)t2.scrollLeft=sx});
+    L.querySelectorAll('.sr1').forEach(el=>el.onclick=()=>edit(el.dataset.id));
     L.querySelectorAll('.bt tr[data-id]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;edit(tr.dataset.id)});
     L.querySelector('.addq')?.addEventListener('click',()=>edit(null,{title:view.q.trim()}));
     if(L.querySelector('.olr'))onlineFind(L.querySelector('.olr'),view.q.trim());
@@ -329,7 +343,7 @@ function onlineFind(box,q){const s=++olSeq;clearTimeout(olT);
 function printView(titles){
   const items=shown(),pv=$('#pv');
   const head=`<h1>${esc(viewName||describe())}</h1><div class="pd">${viewName?esc(describe())+' · ':''}${items.length} book${items.length===1?'':'s'} · printed ${fmtDate(today())}</div>`;
-  pv.innerHTML=head+(!titles&&disp.mode==='table'?tableHtml(items,true):titles?`<ol>${items.map(b=>`<li>${esc(b.title)}${b.author?` <i>— ${esc(b.author)}</i>`:''}</li>`).join('')}</ol>`:items.map(b=>cardHtml(b,true)).join(''));
+  pv.innerHTML=head+(!titles&&disp.mode==='table'?tableHtml(items,true):!titles&&disp.mode==='summary'?summaryHtml(items,true):titles?`<ol>${items.map(b=>`<li>${esc(b.title)}${b.author?` <i>— ${esc(b.author)}</i>`:''}</li>`).join('')}</ol>`:items.map(b=>cardHtml(b,true)).join(''));
   let pg=$('#pgs');if(!pg){pg=document.createElement('style');pg.id='pgs';document.head.append(pg)}
   pg.textContent=!titles&&disp.mode==='table'?'@page{size:landscape}':'';
   setTimeout(()=>window.print(),50);
