@@ -86,12 +86,14 @@
   .ac p{margin:0;min-width:0}.ac b{display:block;font:600 15px/1.25 Georgia,serif}.ac span{font-size:13px;color:var(--mute)}
   .hrow{display:flex;align-items:baseline;gap:8px}.hrow h1{flex:1}
   .hbtn{border:1px solid var(--line);background:var(--card);color:var(--acc2);padding:6px 12px;border-radius:99px;font-size:14px}
-  .tools #views{flex:0 0 auto;max-width:34%}
-  details.flt{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
-  details.flt summary{list-style:none;padding:9px 12px;font-size:15px;color:var(--acc2);cursor:pointer}
-  details.flt summary::-webkit-details-marker{display:none}
-  details.flt summary:before{content:'▸ ';color:var(--mute)}details.flt[open] summary:before{content:'▾ '}
-  details.flt summary span{color:var(--mute)}
+  .fline{display:flex;gap:8px;align-items:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:2px 0 8px;margin-bottom:4px}
+  .fi{flex:0 0 auto;display:flex;flex-direction:column;gap:3px}.fi>span{font-size:12px;color:var(--mute);padding-left:2px}
+  .fi>div{display:flex;gap:4px;align-items:center}
+  .fi select,.fi input{box-sizing:border-box;height:38px;padding:0 6px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:16px;color:var(--ink);font-family:inherit}
+  .fline .fi{margin:0;padding:0;font-weight:400}
+  .fi select{-webkit-appearance:none;appearance:none;padding-right:22px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E") no-repeat right 8px center}
+  .fi input.fpy{width:62px}.fi input[type=date]{-webkit-appearance:none;appearance:none;width:132px}
+  .fline .fclr{flex:0 0 auto;align-self:flex-end;border:0;background:none;color:var(--acc2);text-decoration:underline;font-size:14px;padding:8px 2px}
   .fp{padding:0 12px 10px}
   .fr{display:flex;align-items:center;gap:6px;margin-top:8px}
   .fr>b{flex:0 0 96px;font-weight:400;font-size:14px;color:var(--mute)}
@@ -133,14 +135,8 @@
 <body>
 <header>
   <div class="hrow"><h1>Carol's Books</h1><button type="button" class="hbtn" id="grpbtn">Groups</button></div>
-  <div class="tabs" id="stabs">
-    <button data-st="" class="on">All</button>
-    <button data-st="read">Read</button>
-    <button data-st="want">Want to read</button>
-  </div>
   <div class="tools" id="tools">
     <input id="q" type="search" placeholder="Search title, author, person…">
-    <select id="views" aria-label="Views"></select>
   </div>
 </header>
 <main id="list"></main>
@@ -153,7 +149,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108a"></script>
+<script src="common.js?v=20261108b"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -229,53 +225,36 @@ const tableHtml=(items,pr)=>`<div class="tw"><table class="bt"><thead><tr>${COLS
   <tbody>${items.map(b=>`<tr data-id="${esc(b.id)}">${COLS.map(([k])=>`<td${k==='notes'?' class="nt"':''}>${cell(b,k,pr)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 function setView(v,name=''){view={...BLANK,...v};viewName=name;saveView();syncControls();render()}
 function syncControls(){
-  document.querySelectorAll('#stabs button').forEach(x=>x.classList.toggle('on',x.dataset.st===view.status));
   $('#q').value=view.q||'';
 }
-function fillViews(){
-  const gs=groupNames(),sv=db.views;
-  $('#views').innerHTML='<option value="">Views ▾</option><optgroup label="Quick views"><option value="p:all">All books</option>'+
-    gs.map(g=>`<option value="p:want:${esc(g)}">${esc(g)} — want to read</option><option value="p:read:${esc(g)}">${esc(g)} — read</option>`).join('')+'</optgroup>'+
-    (sv.length?`<optgroup label="My saved views">${sv.map(x=>`<option value="s:${esc(x.id)}">${esc(x.name)}</option>`).join('')}</optgroup>`:'')+
-    `<optgroup label="—"><option value="save">Save this view…</option>${viewName&&sv.some(x=>x.name===viewName)?`<option value="del">Remove “${esc(viewName)}”</option>`:''}</optgroup>`;
-  $('#views').value='';
-}
-$('#views').onchange=e=>{const v=e.target.value;e.target.value='';
-  if(v==='p:all')setView({});
-  else if(v.startsWith('p:')){const[,st,...g]=v.split(':');setView({status:st,group:g.join(':')})}
-  else if(v.startsWith('s:')){const x=db.views.find(x=>x.id===v.slice(2));if(x)setView(x.f,x.name)}
-  else if(v==='save'){const name=(prompt('Name this view',viewName||describe())||'').trim();if(!name)return;
-    const ex=db.views.find(x=>x.name===name),f={...view};
-    if(ex)ex.f=f;else db.views.push({id:id(),name,f});viewName=name;save();render();msg(`Saved view “${name}”.`)}
-  else if(v==='del'){if(confirm(`Remove the saved view “${viewName}”? (No books are deleted.)`)){db.views=db.views.filter(x=>x.name!==viewName);viewName='';save();render()}}
-};
-document.querySelectorAll('#stabs button').forEach(b=>b.onclick=()=>{if(mode!=='books')showBooks();view.status=b.dataset.st;viewName='';saveView();syncControls();render()});
 $('#q').oninput=()=>{view.q=$('#q').value;viewName='';saveView();render()};
 $('#add').onclick=()=>edit(null);
-const showBooks=()=>{mode='books';$('#grpbtn').textContent='Groups';$('#tools').style.display='flex';$('#stabs').style.display='flex';render()};
-$('#grpbtn').onclick=()=>{if(mode==='groups')return showBooks();mode='groups';$('#grpbtn').textContent='‹ Books';$('#tools').style.display='none';$('#stabs').style.display='none';render()};
+const showBooks=()=>{mode='books';$('#grpbtn').textContent='Groups';$('#tools').style.display='flex';render()};
+$('#grpbtn').onclick=()=>{if(mode==='groups')return showBooks();mode='groups';$('#grpbtn').textContent='‹ Books';$('#tools').style.display='none';render()};
 
 const sel=(cls,opts,v)=>`<select class="${cls}">${opts.map(([val,l])=>`<option value="${esc(val)}"${val===v?' selected':''}>${esc(l)}</option>`).join('')}</select>`;
-function filterPanel(open){
+// Carol 11/8: all view fields on one line (scrolls sideways on a phone); every field defaults to "any".
+function filterPanel(){
   const gs=groupNames();if(view.group&&!gs.includes(view.group))gs.push(view.group);
-  const n=extra(view);
-  return `<details class="flt"${open?' open':''}><summary>Filters${n?` <span>· ${esc(describe({...view,status:'',q:''}).replace(/^All books · /,''))}</span>`:''}</summary><div class="fp">
-    <div class="fr"><b>Group</b>${sel('fg',[['','Any group'],...gs.map(g=>[g,g])],view.group)}</div>
-    <div class="fr"><b>Published</b>${sel('q fpq',[['','any'],['before','before'],['in','in'],['after','after']],view.pubQ)}<input class="fpy" inputmode="numeric" maxlength="4" placeholder="year" value="${esc(view.pubY)}"></div>
-    <div class="fr"><b>Recommended</b>${sel('q frq',[['','any'],['before','before'],['on','on'],['after','after']],view.recQ)}<input class="frd" type="date" value="${esc(view.recD)}"></div>
-    <div class="fr"><b>Date read</b>${sel('q fdq',[['','any'],['before','before'],['on','on'],['after','after']],view.readQ)}<input class="fdd" type="date" value="${esc(view.readD)}"></div>
-    <div class="fr"><b>Genre</b><select class="fc"><option value="">Any genre</option>${Object.entries(GENRES).map(([c,gs])=>`<optgroup label="${c}"><option value="${c}"${view.cat===c?' selected':''}>All ${c.toLowerCase()}</option>${gs.map(g=>`<option${view.cat===g?' selected':''}>${g}</option>`).join('')}</optgroup>`).join('')}</select></div>
-    ${n?'<button type="button" class="fclr">Clear filters</button>':''}
-  </div></details>`;
+  const n=extra(view)+(view.status?1:0),Q=a=>[['','any'],...a.map(x=>[x,x])];
+  return `<div class="fline">
+    <label class="fi"><span>Status</span>${sel('fs',[['','any'],['read','Read'],['want','Want to read']],view.status)}</label>
+    <label class="fi"><span>Group</span>${sel('fg',[['','any'],...gs.map(g=>[g,g])],view.group)}</label>
+    <div class="fi"><span>Published</span><div>${sel('fpq',Q(['before','in','after']),view.pubQ)}<input class="fpy" inputmode="numeric" maxlength="4" placeholder="year" value="${esc(view.pubY)}"></div></div>
+    <div class="fi"><span>Recommended</span><div>${sel('frq',Q(['before','on','after']),view.recQ)}<input class="frd" type="date" value="${esc(view.recD)}"></div></div>
+    <div class="fi"><span>Date read</span><div>${sel('fdq',Q(['before','on','after']),view.readQ)}<input class="fdd" type="date" value="${esc(view.readD)}"></div></div>
+    <label class="fi"><span>Genre</span><select class="fc"><option value="">any</option>${Object.entries(GENRES).map(([c,gs])=>`<optgroup label="${c}"><option value="${c}"${view.cat===c?' selected':''}>All ${c.toLowerCase()}</option>${gs.map(g=>`<option${view.cat===g?' selected':''}>${g}</option>`).join('')}</optgroup>`).join('')}</select></label>
+    ${n?'<button type="button" class="fclr">Clear</button>':''}
+  </div>`;
 }
 function wireFilters(L){
-  const d=L.querySelector('details.flt');if(!d)return;
-  const set=(k,v)=>{view[k]=v;viewName='';saveView();render(true)};
+  const d=L.querySelector('.fline');if(!d)return;const sx=d.scrollLeft;
+  const set=(k,v)=>{view[k]=v;viewName='';saveView();render(true);const nd=L.querySelector('.fline');if(nd)nd.scrollLeft=sx};
   const on=(c,k,ev='change')=>{const el=d.querySelector(c);el.addEventListener(ev,()=>set(k,el.value))};
-  on('.fg','group');on('.fpq','pubQ');on('.frq','recQ');on('.fdq','readQ');on('.fc','cat');on('.frd','recD');on('.fdd','readD');
+  on('.fs','status');on('.fg','group');on('.fpq','pubQ');on('.frq','recQ');on('.fdq','readQ');on('.fc','cat');on('.frd','recD');on('.fdd','readD');
   const py=d.querySelector('.fpy');py.addEventListener('input',()=>{const v=py.value.replace(/\D/g,'').slice(0,4);if(v.length===4||!v){view.pubY=v;if(v&&!view.pubQ)view.pubQ='before';viewName='';saveView();render(true,'.fpy')}});
   ['.frd','.fdd'].forEach((c,i)=>d.querySelector(c).addEventListener('change',()=>{const k=i?'readQ':'recQ';if(view[i?'readD':'recD']&&!view[k]){view[k]='after';saveView();render(true)}}));
-  const c=d.querySelector('.fclr');if(c)c.onclick=()=>setView({status:view.status,q:view.q});
+  const c=d.querySelector('.fclr');if(c)c.onclick=()=>setView({q:view.q});
 }
 
 const cardHtml=(b,pr)=>`
@@ -293,7 +272,6 @@ const cardHtml=(b,pr)=>`
         </div>
         ${aboutHtml(b)}${reviewHtml(b)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
-        ${!pr&&b.status==='want'?'<div class="gact"><button type="button" class="mkr">✓ Mark as read</button></div>':''}
       </div>`;
 
 function render(keepOpen,refocus){
@@ -304,9 +282,8 @@ function render(keepOpen,refocus){
       return `<div class="card" data-id="${g.id}"><div class="t">${esc(g.name)}</div>${g.members?`<div class="a">${esc(g.members)}</div>`:''}<div class="meta">${g.meets?`<span class="pill">${esc(g.meets)}</span>`:''}<span class="pill">${recs} book${recs===1?'':'s'}</span>${g.token?'<span class="pill sh">Shared</span>':''}</div>${g.notes?`<div class="note">${link(g.notes)}</div>`:''}<div class="gact">${g.token?'<button type="button" class="open">Shared list</button>':''}<button type="button" class="share">Share link</button></div></div>`}).join('')
       :`<div class="empty">No book groups yet.<br>Tap + to add one.</div>`;
   }else{
-    const wasOpen=keepOpen===true||!!L.querySelector('details.flt[open]');
     const items=shown(),n=db.books.length;
-    L.innerHTML=filterPanel(wasOpen)+`<div class="crow"><div class="count">${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}</div><button type="button" class="tgl">${disp.mode==='table'?'Cards':'Table'}</button>${items.length?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`+
+    L.innerHTML=filterPanel()+`<div class="crow"><div class="count">${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}</div><button type="button" class="tgl">${disp.mode==='table'?'Cards':'Table'}</button>${items.length?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`+
       (items.length?(disp.mode==='table'?tableHtml(items):items.map(b=>cardHtml(b)).join('')):`<div class="empty">${n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
     wireFilters(L);
     L.querySelector('.tgl').onclick=()=>{disp.mode=disp.mode==='table'?'cards':'table';saveDisp();render()};
@@ -317,12 +294,10 @@ function render(keepOpen,refocus){
     L.querySelector('.prt')?.addEventListener('click',()=>printView(true));
     if(refocus){const el=L.querySelector(refocus);if(el){el.focus();const v=el.value;el.value='';el.value=v}}
   }
-  fillViews();
   L.querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName==='A')return;
     const g=mode==='groups'&&db.groups.find(x=>x.id===el.dataset.id);
     if(g&&e.target.closest('.share'))return shareGroup(g);
     if(g&&g.token)return groupView(g);
-    if(mode==='books'&&e.target.closest('.mkr'))return markRead(el.dataset.id);
     edit(el.dataset.id)});
 }
 
@@ -370,7 +345,7 @@ function edit(eid){
       <label>Review link</label><input name="review" type="url" inputmode="url" value="${esc(it.review)}" placeholder="https://…">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
   }
-  f.innerHTML+=(eid?`<div class="btns">${!grp&&it.status==='want'?'<button type="button" class="mv">Mark read</button>':''}${grp?'<button type="button" class="shr">Share link</button>':''}<button type="button" class="del">Delete</button></div>`:'')+'</div>';
+  f.innerHTML+=(eid?`<div class="btns">${grp?'<button type="button" class="shr">Share link</button>':''}<button type="button" class="del">Delete</button></div>`:'')+'</div>';
   f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
   f.querySelectorAll('.rate button').forEach(b=>b.onclick=()=>{const n=+b.dataset.n;st.rating=st.rating===n?0:n;f.querySelectorAll('.rate button').forEach(x=>x.classList.toggle('on',+x.dataset.n<=st.rating))});
   f.querySelectorAll('.st button').forEach(b=>b.onclick=()=>{st.status=b.dataset.s;f.querySelectorAll('.st button').forEach(x=>x.classList.toggle('on',x===b));
@@ -384,7 +359,6 @@ function edit(eid){
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){if(grp)db.groups=db.groups.filter(x=>x.id!==eid);else db.books=db.books.filter(x=>x.id!==eid);save();close();render()}};
   const shr=f.querySelector('.shr');if(shr)shr.onclick=()=>shareGroup(it);
-  const mv=f.querySelector('.mv');if(mv)mv.onclick=()=>{const o=collect();close();markRead(eid,o)};
   f.onsubmit=e=>{e.preventDefault();if(!f.reportValidity())return;const o=collect();
     let rec=it;
     if(grp){if(eid&&it.name!==o.name)renameGroup(it,o.name)}
