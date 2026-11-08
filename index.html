@@ -161,7 +161,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108h"></script>
+<script src="common.js?v=20261108i"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -240,7 +240,7 @@ const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return disp.
 const summaryHtml=(items,pr)=>['want','read'].map(st=>{const it=items.filter(b=>b.status===st);if(!it.length)return'';
   const pgs=it.reduce((t,b)=>t+(parseInt(b.pages)||0),0);
   return `<div class="sh2">${STL[st]} <span>${it.length} book${it.length===1?'':'s'}${pgs?` · ${pgs.toLocaleString()} pages`:''}</span></div><div class="sl">`+
-    it.map(b=>`<div class="sr1" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span class="m">${[b.author,b.cat].filter(Boolean).map(x=>` · ${esc(x)}`).join('')}</span><span class="p">${b.pages?esc(b.pages)+' pages':''}</span></div>`).join('')+'</div>'}).join('');
+    it.map(b=>`<div class="sr1" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span class="m">${[b.author,b.cat,pr&&b.year].filter(Boolean).map(x=>` · ${esc(x)}`).join('')}</span><span class="p">${b.pages?esc(b.pages)+' pages':''}</span></div>`).join('')+'</div>'}).join('');
 function cell(b,k,pr){const v=k==='group'?gsOf(b).join(', '):b[k];
   if(k==='status')return STL[v]||'';
   if(k==='date'||k==='dateRec')return v?fmtDate(v):'';
@@ -350,7 +350,7 @@ function onlineFind(box,q){const s=++olSeq;clearTimeout(olT);
 function printView(titles){
   const items=shown(),pv=$('#pv');
   const head=`<h1>${esc(viewName||describe())}</h1><div class="pd">${viewName?esc(describe())+' · ':''}${items.length} book${items.length===1?'':'s'} · printed ${fmtDate(today())}</div>`;
-  pv.innerHTML=head+(!titles&&disp.mode==='table'?tableHtml(items,true):!titles&&disp.mode==='summary'?summaryHtml(items,true):titles?`<ol>${items.map(b=>`<li>${esc(b.title)}${b.author?` <i>— ${esc(b.author)}</i>`:''}</li>`).join('')}</ol>`:items.map(b=>cardHtml(b,true)).join(''));
+  pv.innerHTML=head+(!titles&&disp.mode==='table'?tableHtml(items,true):!titles&&disp.mode==='summary'?summaryHtml(items,true):titles?`<ol>${items.map(b=>`<li>${esc(b.title)}${b.author?` <i>— ${esc(b.author)}</i>`:''}${[b.year&&'published '+esc(b.year),b.pages&&esc(b.pages)+' pages'].filter(Boolean).map(x=>` · ${x}`).join('')}</li>`).join('')}</ol>`:items.map(b=>cardHtml(b,true)).join(''));
   let pg=$('#pgs');if(!pg){pg=document.createElement('style');pg.id='pgs';document.head.append(pg)}
   pg.textContent=!titles&&disp.mode==='table'?'@page{size:landscape}':'';
   setTimeout(()=>window.print(),50);
