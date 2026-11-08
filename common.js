@@ -72,7 +72,7 @@ function bookAC(inp,pick){
   let seq=0,t=0,docs=[];
   const hide=()=>{box.hidden=true;box.innerHTML='';docs=[]};
   const show=d=>{docs=d.filter(x=>x.title).slice(0,6);if(!docs.length||document.activeElement!==inp)return hide();
-    box.innerHTML=docs.map((x,i)=>`<div data-i="${i}">${x.cover_i?`<img src="https://covers.openlibrary.org/b/id/${x.cover_i}-S.jpg" alt="">`:/^https:\/\/[\w.-]+\.mzstatic\.com\//.test(x.art)?`<img src="${esc(x.art)}" alt="">`:'<i></i>'}<p><b>${esc(x.title)}</b><span>${esc([(x.author_name||[])[0],x.first_publish_year].filter(Boolean).join(' · '))}</span></p></div>`).join('')+'<div class="hint">Not listed? Add the author, e.g. “Land O’Farrell”</div>';box.hidden=false};
+    box.innerHTML=docs.map(acRow).join('')+'<div class="hint">Not listed? Add the author, e.g. “Land O’Farrell”</div>';box.hidden=false};
   const run=(min,wait)=>{clearTimeout(t);const q=inp.value.trim().toLowerCase(),s=++seq;if(q.length<min)return hide();
     if(cache.has(q))return show(cache.get(q));
     t=setTimeout(async()=>{try{const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),8000);
@@ -85,11 +85,14 @@ function bookAC(inp,pick){
   inp.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==inp){seq++;hide()}},250));
   inp.addEventListener('keydown',e=>{if(e.key==='Escape'){seq++;hide()}});
   box.addEventListener('mousedown',e=>e.preventDefault());
-  box.addEventListener('click',async e=>{const el=e.target.closest('[data-i]');let x=el&&docs[+el.dataset.i];if(!x)return;seq++;hide();inp.blur();
-    if(x.ap){const a=x,m=await olMatch(a.title,a.author_name[0]);const g=guessGenre(a.genres);
-      x={...(m||{}),title:a.title,author_name:a.author_name,first_publish_year:a.first_publish_year||(m&&m.first_publish_year),subject:g.cat?a.genres:(m&&m.subject)||a.genres,art100:a.art100}}
-    pick({key:/^\/works\/OL\w+$/.test(x.key||'')?x.key:'',title:x.title,author:(x.author_name||[])[0]||'',pages:x.number_of_pages_median||'',year:x.first_publish_year||'',cover:x.cover_i?`https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg`:apCover(x.art100),...guessGenre(x.subject)})});
+  box.addEventListener('click',async e=>{const el=e.target.closest('[data-i]');let x=el&&docs[+el.dataset.i];if(!x)return;seq++;hide();inp.blur();pick(await resolvePick(x))});
 }
+// One suggestion row (Open Library doc or Apple result) → fillPicked() shape. Apple picks are resolved to their OL work.
+const acRow=(x,i)=>`<div data-i="${i}">${x.cover_i?`<img src="https://covers.openlibrary.org/b/id/${x.cover_i}-S.jpg" alt="">`:/^https:\/\/[\w.-]+\.mzstatic\.com\//.test(x.art)?`<img src="${esc(x.art)}" alt="">`:'<i></i>'}<p><b>${esc(x.title)}</b><span>${esc([(x.author_name||[])[0],x.first_publish_year].filter(Boolean).join(' · '))}</span></p></div>`;
+async function resolvePick(x){
+  if(x.ap){const a=x,m=await olMatch(a.title,a.author_name[0]);const g=guessGenre(a.genres);
+    x={...(m||{}),title:a.title,author_name:a.author_name,first_publish_year:a.first_publish_year||(m&&m.first_publish_year),subject:g.cat?a.genres:(m&&m.subject)||a.genres,art100:a.art100}}
+  return{key:/^\/works\/OL\w+$/.test(x.key||'')?x.key:'',title:x.title,author:(x.author_name||[])[0]||'',pages:x.number_of_pages_median||'',year:x.first_publish_year||'',cover:x.cover_i?`https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg`:apCover(x.art100),...guessGenre(x.subject)}}
 // Best edition of a work for pages/publisher/year: prefer English, then editions that have those fields.
 const olEdition=async k=>{if(!k)return{};try{const es=(await (await fetch('https://openlibrary.org'+k+'/editions.json?limit=50')).json()).entries||[];
   const sc=e=>((e.languages||[]).some(l=>l.key==='/languages/eng')?4:(e.languages||[]).length?0:1)+(e.number_of_pages?2:0)+((e.publishers||[]).length?2:0)+(e.publish_date?1:0);
@@ -127,7 +130,7 @@ function fillPicked(f,b){const fv=n=>f.querySelector(`[name=${n}]`),seq=f._pick=
   olEdition(b.key).then(e=>{late('pages',e.pages);late('year',e.year);return ap}).then(x=>{late('year',x.year);late('cover',x.cover);
     if(x.genres){const g=guessGenre(x.genres);if(g.cat){late('cat',g.cat);if(fv('cat')&&fv('cat').value===g.cat)late('genre',g.genre)}}})}
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261108d';
+const APPV='20261108e';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});

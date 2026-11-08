@@ -70,6 +70,7 @@
   .sbtn:disabled{color:var(--mute);background:none}
   .pill.sh{background:#dde9e4;color:var(--acc2)}
   .pill.sr{background:#dde9e4;color:var(--acc2);font-weight:600} .pill.sw{background:#fbeccd;color:#8a5a00;font-weight:600}
+  .empty .olr{text-align:left;color:var(--ink);font-size:16px;margin:14px auto 0;max-width:460px}
   .empty .addq{margin-top:14px;font:inherit;font-size:16px;padding:10px 16px;border-radius:12px;border:0;background:var(--acc);color:#fff}
   .rv{font-style:italic}.rv a{color:var(--acc2)}
   .status{color:var(--mute);font-size:14px;margin:12px 2px}
@@ -152,7 +153,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108d"></script>
+<script src="common.js?v=20261108e"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -292,13 +293,14 @@ function render(keepOpen,refocus){
   }else{
     const items=shown(),n=db.books.length;
     L.innerHTML=filterPanel()+`<div class="crow"><div class="count">${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}</div><button type="button" class="tgl">${disp.mode==='table'?'Cards':'Table'}</button>${items.length?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`+
-      (items.length?(disp.mode==='table'?tableHtml(items):items.map(b=>cardHtml(b)).join('')):`<div class="empty">${view.q?`None of your books match “${esc(view.q)}”.<br><button type="button" class="addq">Find “${esc(view.q)}” and add it</button>`:n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
+      (items.length?(disp.mode==='table'?tableHtml(items):items.map(b=>cardHtml(b)).join('')):`<div class="empty">${view.q?`“${esc(view.q)}” isn’t in your books yet.<div class="olr ac"><div class="hint">Searching online…</div></div><button type="button" class="addq">Add “${esc(view.q)}” yourself</button>`:n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
     wireFilters(L);
     L.querySelector('.tgl').onclick=()=>{disp.mode=disp.mode==='table'?'cards':'table';saveDisp();render()};
     L.querySelectorAll('.bt th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;disp.dir=disp.k===k?-disp.dir:1;disp.k=k;saveDisp();
       const sx=L.querySelector('.tw').scrollLeft;render();L.querySelector('.tw').scrollLeft=sx});
     L.querySelectorAll('.bt tr[data-id]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;edit(tr.dataset.id)});
     L.querySelector('.addq')?.addEventListener('click',()=>edit(null,{title:view.q.trim()}));
+    if(L.querySelector('.olr'))onlineFind(L.querySelector('.olr'),view.q.trim());
     L.querySelector('.prc')?.addEventListener('click',()=>printView(false));
     L.querySelector('.prt')?.addEventListener('click',()=>printView(true));
     if(refocus){const el=L.querySelector(refocus);if(el){el.focus();const v=el.value;el.value='';el.value=v}}
@@ -309,6 +311,19 @@ function render(keepOpen,refocus){
     if(g&&g.token)return groupView(g);
     edit(el.dataset.id)});
 }
+
+// No book of hers matches the search → look the title up online right there; tapping a result opens
+// a new book (status = the Status filter, else Read) already filled in, same as picking in the add form (Carol 11/8).
+const olCache=new Map();let olSeq=0,olT=0;
+function onlineFind(box,q){const s=++olSeq;clearTimeout(olT);
+  const show=d=>{if(s!==olSeq||!box.isConnected)return;const docs=d.filter(x=>x.title).slice(0,6);
+    box.innerHTML=docs.length?'<div class="hint">Found online — tap to add</div>'+docs.map(acRow).join(''):'<div class="hint">Nothing found online either — try adding the author.</div>';
+    box.onclick=async e=>{const el=e.target.closest('[data-i]'),x=el&&docs[+el.dataset.i];if(!x)return;
+      const b=await resolvePick(x);edit(null,{});fillPicked($('#f'),b)}};
+  if(olCache.has(q.toLowerCase()))return show(olCache.get(q.toLowerCase()));
+  olT=setTimeout(async()=>{try{const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),8000);
+    const d=await bookFind(q.toLowerCase(),ctl.signal).finally(()=>clearTimeout(tm));olCache.set(q.toLowerCase(),d);show(d)}
+    catch{if(s===olSeq&&box.isConnected)box.innerHTML='<div class="hint">Couldn’t search online just now.</div>'}},400)}
 
 // ---------- printing ----------
 function printView(titles){
