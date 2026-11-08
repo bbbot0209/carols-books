@@ -125,6 +125,7 @@
   .sr1{display:flex;align-items:baseline;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;white-space:nowrap;cursor:pointer}
   .sr1 b,.sr1 .m{overflow:hidden;text-overflow:ellipsis;min-width:0}.sr1 b{flex:0 1 auto;max-width:72%}.sr1 .m{flex:1 1 0;opacity:.8;margin-left:4px}.sr1 .p{flex:none;margin-left:8px;opacity:.7}.sr1:last-child{border-bottom:0}.sr1:active{background:#f3ece0}
   .sr1 b{font:600 13px Georgia,serif}
+  .gsts{margin:0 0 8px}.gsr{display:flex;align-items:center;gap:8px;margin:0 0 6px}.gsr>span{flex:0 0 32%;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gsr .seg{flex:1}.gsr .seg button{padding:8px 4px;font-size:14px}
   #pv{display:none}
   @media print{
     body{background:#fff;padding:0;font-size:12pt}
@@ -161,24 +162,33 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108i"></script>
+<script src="common.js?v=20261108j"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
-// Data model (v2, 11/8): ONE table db.books, each book has status 'read' | 'want'. Plus db.groups and db.views
+// Data model (v2, 11/8): ONE table db.books, each book has (overall) status 'read' | 'want'. Plus db.groups and db.views
 // (saved filters). Older data had separate db.read / db.want lists — normDb() folds them in losslessly (every field
 // and id kept). It runs on every load/restore/sync, so data pushed by an older cached copy of the app is merged too.
 // A book can belong to several groups (Carol 11/8): b.groups = [names]. Older data had one b.group string.
 // The old single field already held typed lists like "BAIP, Olmsted", so it splits on commas.
 function normGroups(b){const a=[...(Array.isArray(b.groups)?b.groups:[]),...String(b.group??'').split(',')].map(x=>String(x??'').trim()).filter(Boolean);
   b.groups=[...new Set(a)];delete b.group;return b}
+// Status is PER GROUP (Carol 11/8: a book read by one group can be a want-to-read for another).
+// b.gst = {groupName: 'read'|'want'}, one entry per name in b.groups. b.status = the overall status:
+// 'read' if any of its groups has read it, else 'want'; a book with no groups keeps its own b.status.
+// Migration: a group with no gst entry inherits the book's current status (idempotent, nothing dropped but
+// entries for groups the book is no longer in). Older cached clients keep the gst field untouched.
+const okSt=s=>s==='read'||s==='want';
+function normGst(b){const gs=Array.isArray(b.groups)?b.groups:[],o=b.gst&&typeof b.gst==='object'&&!Array.isArray(b.gst)?b.gst:{},n={};
+  gs.forEach(g=>n[g]=okSt(o[g])?o[g]:b.status);b.gst=n;if(gs.length)b.status=gs.some(g=>n[g]==='read')?'read':'want';return b}
+const gstOf=(b,g)=>okSt((b.gst||{})[g])?b.gst[g]:b.status;
 const gsOf=b=>Array.isArray(b.groups)?b.groups:b.group?String(b.group).split(',').map(x=>x.trim()).filter(Boolean):[];
 function normDb(d){
   d=d&&typeof d==='object'?d:{};
   const books=Array.isArray(d.books)?d.books.filter(b=>b&&typeof b==='object'):[],ids=new Set(books.map(b=>b.id));
-  books.forEach(b=>{if(b.status!=='read'&&b.status!=='want')b.status=b.date||b.rating?'read':'want';normGroups(b)});
+  books.forEach(b=>{if(b.status!=='read'&&b.status!=='want')b.status=b.date||b.rating?'read':'want';normGst(normGroups(b))});
   for(const st of ['read','want'])(Array.isArray(d[st])?d[st]:[]).forEach(b=>{if(!b||typeof b!=='object')return;
-    if(b.id&&ids.has(b.id))return;if(b.id)ids.add(b.id);books.push(normGroups({...b,status:st}))});
+    if(b.id&&ids.has(b.id))return;if(b.id)ids.add(b.id);books.push(normGst(normGroups({...b,status:st})))});
   const o={...d,books,groups:Array.isArray(d.groups)?d.groups:[],views:Array.isArray(d.views)?d.views:[]};
   delete o.read;delete o.want;return o;
 }
@@ -199,8 +209,12 @@ let view={...BLANK,...(JSON.parse(localStorage.getItem(VKEY)||'null')||{})},view
 const saveView=()=>localStorage.setItem(VKEY,JSON.stringify(view));
 const cmp=(v,q,x)=>q==='before'?v<x:q==='after'?v>x:(v===x||(x.startsWith(v+'-')));   // 'in'/'on'; old YYYY-MM dates match any day of that month
 const fold=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/['’]/g,'');
+// With a Group filter, Status means THAT group's status; with none, a book matches if it or any of its groups has it.
+const hasSt=(b,s)=>b.status===s||gsOf(b).some(g=>gstOf(b,g)===s);
+// The status a book is shown/sorted under in the current view.
+const stOf=(b,v=view)=>v.group&&gsOf(b).includes(v.group)?gstOf(b,v.group):v.status&&hasSt(b,v.status)?v.status:b.status;
 function matches(b,v=view){
-  if(v.status&&b.status!==v.status)return false;
+  if(v.status&&(v.group?!gsOf(b).includes(v.group)||gstOf(b,v.group)!==v.status:!hasSt(b,v.status)))return false;
   if(v.group&&!gsOf(b).includes(v.group))return false;
   if(v.cat&&b.cat!==v.cat&&b.genre!==v.cat)return false;
   if(v.pubQ&&/^\d{3,4}$/.test(v.pubY)){const y=parseInt(b.year);if(!y||!(v.pubQ==='before'?y<+v.pubY:v.pubQ==='after'?y>+v.pubY:y===+v.pubY))return false}
@@ -225,24 +239,24 @@ function describe(v=view){
 const extra=v=>[v.group,v.pubQ&&v.pubY,v.recQ&&v.recD,v.readQ&&v.readD,v.cat].filter(Boolean).length;
 function sortBooks(items){
   const rd=(a,b)=>(b.date||'').localeCompare(a.date||'')||(b.added||0)-(a.added||0),ad=(a,b)=>(b.added||0)-(a.added||0);
-  return items.sort((a,b)=>a.status!==b.status?(a.status==='want'?-1:1):a.status==='read'?rd(a,b):ad(a,b));
+  return items.sort((a,b)=>{const x=stOf(a),y=stOf(b);return x!==y?(x==='want'?-1:1):x==='read'?rd(a,b):ad(a,b)});
 }
 // Cards or Table display (Carol 11/8: "each field is a column"). Table columns = the book fields, tap a header to sort.
 let disp={mode:'cards',k:'',dir:1,...(JSON.parse(localStorage.getItem('carol-books-disp')||'null')||{})};
 const saveDisp=()=>localStorage.setItem('carol-books-disp',JSON.stringify(disp));
 const COLS=[['title','Title'],['author','Author'],['status','Status'],['cat','Category'],['genre','Genre'],['pages','Pages',1],['year','Year published',1],['date','Date read'],['rating','Rating',1],['by','Recommended by'],['dateRec','Date recommended'],['group','Groups'],['review','Review link'],['notes','Notes']];
 function sortBy(items){const c=COLS.find(c=>c[0]===disp.k);if(!c)return items;const[k,,num]=c;
-  const val=b=>{const v=k==='group'?gsOf(b).join(', '):b[k];return num?(parseFloat(v)||null):String(v??'').trim().toLowerCase()||null};
+  const val=b=>{const v=k==='group'?gsOf(b).join(', '):k==='status'?stOf(b):b[k];return num?(parseFloat(v)||null):String(v??'').trim().toLowerCase()||null};
   return items.sort((a,b)=>{const x=val(a),y=val(b);if(x===null||y===null)return x===y?0:x===null?1:-1;   // blanks always last
     return (num?x-y:x.localeCompare(y))*disp.dir})}
 const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return disp.mode!=='cards'?sortBy(it):it};
 // Summary (Carol 11/8): just Title, Author, Category, Pages — split into Want to read / Read, each with its page total.
-const summaryHtml=(items,pr)=>['want','read'].map(st=>{const it=items.filter(b=>b.status===st);if(!it.length)return'';
+const summaryHtml=(items,pr)=>['want','read'].map(st=>{const it=items.filter(b=>stOf(b)===st);if(!it.length)return'';
   const pgs=it.reduce((t,b)=>t+(parseInt(b.pages)||0),0);
   return `<div class="sh2">${STL[st]} <span>${it.length} book${it.length===1?'':'s'}${pgs?` · ${pgs.toLocaleString()} pages`:''}</span></div><div class="sl">`+
     it.map(b=>`<div class="sr1" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span class="m">${[b.author,b.cat,pr&&b.year].filter(Boolean).map(x=>` · ${esc(x)}`).join('')}</span><span class="p">${b.pages?esc(b.pages)+' pages':''}</span></div>`).join('')+'</div>'}).join('');
 function cell(b,k,pr){const v=k==='group'?gsOf(b).join(', '):b[k];
-  if(k==='status')return STL[v]||'';
+  if(k==='status'){const gs=gsOf(b);return view.group&&gs.includes(view.group)?STL[gstOf(b,view.group)]:gs.length?gs.map(g=>`${esc(g)} · ${STL[gstOf(b,g)]}`).join(', '):STL[v]||''}
   if(k==='date'||k==='dateRec')return v?fmtDate(v):'';
   if(k==='rating')return v?`<span class="stars">${'★'.repeat(v)}</span>`:'';
   if(k==='review')return /^https?:\/\/\S+$/i.test(v||'')?(pr?esc(v.replace(/^https?:\/\/(www\.)?/i,'').split('/')[0]):`<a href="${esc(v)}" target="_blank" rel="noopener">Review ↗</a>`):'';
@@ -285,18 +299,21 @@ function wireFilters(L){
   const c=d.querySelector('.fclr');if(c)c.onclick=()=>setView({q:view.q});
 }
 
+// Status pills: one per group ("Olmsted · Read", "BAIP · Want to read"), the filtered group first; no groups → plain status.
+const stPill=(s,g)=>`<span class="pill ${s==='want'?'sw':'sr'}">${g?esc(g)+' · ':''}${STL[s]}</span>`;
+function stPills(b,pr){const gs=gsOf(b);if(!gs.length)return pr&&view.status?'':stPill(b.status);
+  return (view.group&&gs.includes(view.group)?[view.group,...gs.filter(g=>g!==view.group)]:gs).map(g=>stPill(gstOf(b,g),g)).join('')}
 const cardHtml=(b,pr)=>`
       <div class="card${coverImg(b)?' hc':''}" data-id="${b.id}">${coverImg(b)}
         <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
         <div class="meta">
-          ${pr&&view.status?'':`<span class="pill ${b.status==='want'?'sw':'sr'}">${STL[b.status]}</span>`}
+          ${stPills(b,pr)}
           ${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${b.cat}</span>`:''}
           ${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}
           ${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}
           ${b.status==='read'&&b.date?`<span class="pill">${fmtDate(b.date)}</span>`:''}
           ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
           ${recPill({rec:b.by,dateRec:b.dateRec})}
-          ${gsOf(b).map(g=>`<span class="pill">${esc(g)}</span>`).join('')}
         </div>
         ${aboutHtml(b)}${reviewHtml(b)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
@@ -358,7 +375,8 @@ function printView(titles){
 
 // Want → Read: change the status, date it today, then open it so she can rate it / adjust the date.
 function markRead(bid,o){const b=db.books.find(x=>x.id===bid);if(!b)return;
-  Object.assign(b,o||{},{status:'read',date:(o||b).date||today()});save();pushBook(b);
+  Object.assign(b,o||{},{status:'read',date:(o||b).date||today()});
+  gsOf(b).forEach(g=>{if(!view.group||g===view.group)(b.gst=b.gst||{})[g]='read'});normGst(b);save();pushBook(b);
   if(view.status==='want'){view.status='read';viewName='';saveView();syncControls()}render();edit(b.id)}
 const bar=t=>`<div class="bar"><button type="button" class="cx">Cancel</button><h2>${esc(t)}</h2><button class="pri">Save</button></div>`;
 const close=()=>$('#dlg').close();
@@ -375,9 +393,9 @@ function edit(eid,pre){
       <label>When it meets</label><input name="meets" value="${esc(it.meets)}" placeholder="2nd Tuesday">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
   }else{
-    const read=st.status==='read';st.groups=[...gsOf(it)];const gpick=allGroupNames();
+    const read=st.status==='read';st.groups=[...gsOf(it)];st.gst={...(it.gst||{})};const gpick=allGroupNames();
     f.innerHTML=`${bar(eid?'Edit book':'New book')}<div class="fb">
-      <label>Status</label><div class="seg st">${['read','want'].map(s=>`<button type="button" data-s="${s}" class="${st.status===s?'on':''}">${STL[s]}</button>`).join('')}</div>
+      <div class="stw"${st.groups.length?' hidden':''}><label>Status</label><div class="seg st">${['read','want'].map(s=>`<button type="button" data-s="${s}" class="${st.status===s?'on':''}">${STL[s]}</button>`).join('')}</div></div>
       <label>Title</label><input name="title" required value="${esc(it.title)}"><input type="hidden" name="cover" value="${esc(it.cover)}">
       <div class="row"><div style="flex:3"><label>Author</label><input name="author" value="${esc(it.author)}"></div><div><label>Pages</label><input name="pages" type="number" inputmode="numeric" min="1" max="10000" value="${esc(it.pages)}"></div></div>
       <label>Year published</label><input name="year" inputmode="numeric" maxlength="4" value="${esc(it.year)}">
@@ -385,7 +403,7 @@ function edit(eid,pre){
       <div class="row"><div><label>Category</label><input name="cat" value="${esc(it.cat)}" placeholder="Fills in automatically"></div><div style="flex:2"><label>Genre</label><input name="genre" value="${esc(it.genre)}" placeholder="Fills in automatically"></div></div>
       <div class="rd"${read?'':' hidden'}><label>Date read</label><input name="date" type="date" value="${esc(/^\d{4}-\d{2}$/.test(it.date||'')?it.date+'-01':it.date)}">
       <label>My rating</label><div class="rate">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" class="${(it.rating||0)>=n?'on':''}">★</button>`).join('')}</div></div>
-      <label>Book groups</label>${gpick.length?`<div class="gpk">${gpick.map(g=>`<button type="button" class="${st.groups.includes(g)?'on':''}">${esc(g)}</button>`).join('')}</div>`:''}<input name="gnew" placeholder="${gpick.length?'Another group — type its name':'Group name'}">
+      <label>Book groups</label>${gpick.length?`<div class="gpk">${gpick.map(g=>`<button type="button" class="${st.groups.includes(g)?'on':''}">${esc(g)}</button>`).join('')}</div>`:''}<div class="gsts"></div><input name="gnew" placeholder="${gpick.length?'Another group — type its name':'Group name'}">
       <label>About the book</label><textarea name="about" placeholder="Fills in when you pick a suggested title">${esc(it.about)}</textarea>
       <label>Review link</label><input name="review" type="url" inputmode="url" value="${esc(it.review)}" placeholder="https://…">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
@@ -393,16 +411,27 @@ function edit(eid,pre){
   f.innerHTML+=(eid?`<div class="btns">${grp?'<button type="button" class="shr">Share link</button>':''}<button type="button" class="del">Delete</button></div>`:'')+'</div>';
   f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
   f.querySelectorAll('.rate button').forEach(b=>b.onclick=()=>{const n=+b.dataset.n;st.rating=st.rating===n?0:n;f.querySelectorAll('.rate button').forEach(x=>x.classList.toggle('on',+x.dataset.n<=st.rating))});
-  f.querySelectorAll('.st button').forEach(b=>b.onclick=()=>{st.status=b.dataset.s;f.querySelectorAll('.st button').forEach(x=>x.classList.toggle('on',x===b));
-    const rd=f.querySelector('.rd'),di=f.querySelector('[name=date]');rd.hidden=st.status!=='read';if(st.status==='read'&&!di.value)di.value=today();
+  // Per-group status: each selected group gets its own Read / Want to read toggle. The top Status control is
+  // for a book with no groups, and is the starting status for a group newly ticked here.
+  const overall=()=>st.groups.length?(st.groups.some(g=>st.gst[g]==='read')?'read':'want'):st.status;
+  const refresh=()=>{if(grp)return;const gw=f.querySelector('.gsts');
+    gw.innerHTML=st.groups.map(g=>`<div class="gsr" data-g="${esc(g)}"><span>${esc(g)}</span><div class="seg">${['read','want'].map(s=>`<button type="button" data-s="${s}" class="${st.gst[g]===s?'on':''}">${STL[s]}</button>`).join('')}</div></div>`).join('');
+    f.querySelector('.stw').hidden=!!st.groups.length;f.querySelectorAll('.st button').forEach(x=>x.classList.toggle('on',x.dataset.s===st.status));
+    const rd=f.querySelector('.rd'),di=f.querySelector('[name=date]'),o=overall();if(rd.hidden!==(o!=='read')){rd.hidden=o!=='read';if(o==='read'&&!di.value)di.value=today()}};
+  f.querySelectorAll('.st button').forEach(b=>b.onclick=()=>{st.status=b.dataset.s;refresh();
     const dr=f.querySelector('[name=dateRec]');if(!eid&&st.status==='want'&&!dr.value)dr.value=today()});
-  f.querySelectorAll('.gpk button').forEach(x=>x.onclick=()=>{const g=x.textContent;x.classList.toggle('on');st.groups=x.classList.contains('on')?[...st.groups,g]:st.groups.filter(y=>y!==g)});
+  f.querySelectorAll('.gpk button').forEach(x=>x.onclick=()=>{const g=x.textContent,was=overall();x.classList.toggle('on');
+    if(x.classList.contains('on')){st.groups=[...st.groups,g];if(!okSt(st.gst[g]))st.gst[g]=st.status}
+    else{st.groups=st.groups.filter(y=>y!==g);if(!st.groups.length)st.status=was}refresh()});
+  if(!grp){st.groups.forEach(g=>{if(!okSt(st.gst[g]))st.gst[g]=st.status});refresh();
+    f.querySelector('.gsts').onclick=e=>{const b=e.target.closest('button[data-s]'),r=b&&b.closest('.gsr');if(!r)return;st.gst[r.dataset.g]=b.dataset.s;refresh()}}
   const gi=f.querySelector('[name=genre]'),ci=f.querySelector('[name=cat]');
   if(ci){const fv=n=>f.querySelector(`[name=${n}]`);
     bookAC(fv('title'),b=>fillPicked(f,b))}
   // Date read + rating stay stored on a book switched to Want (hidden, not erased), so switching back loses nothing.
   const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(!grp){o.cat=normCat(o.cat);o.status=st.status;o.rating=st.rating;
-    o.groups=[...new Set([...st.groups,...String(o.gnew||'').split(',').map(x=>x.trim()).filter(Boolean)])];delete o.gnew;delete o.group}return o};
+    o.groups=[...new Set([...st.groups,...String(o.gnew||'').split(',').map(x=>x.trim()).filter(Boolean)])];delete o.gnew;delete o.group;
+    o.gst=Object.fromEntries(o.groups.map(g=>[g,okSt(st.gst[g])?st.gst[g]:st.status]));normGst(o)}return o};
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){if(grp)db.groups=db.groups.filter(x=>x.id!==eid);else db.books=db.books.filter(x=>x.id!==eid);save();close();render()}};
   const shr=f.querySelector('.shr');if(shr)shr.onclick=()=>shareGroup(it);
@@ -470,7 +499,8 @@ async function pushBook(b,quiet){
 }
 async function syncPending(){for(const b of [...db.books])if(b.dirty&&!(await pushBook(b,true)))return false;return true}
 function renameGroup(g,name){
-  db.books.forEach(b=>{if(gsOf(b).includes(g.name))b.groups=gsOf(b).map(x=>x===g.name?name:x)});
+  db.books.forEach(b=>{if(gsOf(b).includes(g.name)){b.groups=gsOf(b).map(x=>x===g.name?name:x);
+    if(b.gst&&g.name in b.gst){b.gst[name]=b.gst[g.name];delete b.gst[g.name]}normGst(b)}});
   db.views.forEach(v=>{if(v.f&&v.f.group===g.name)v.f.group=name});
   if(view.group===g.name){view.group=name;saveView()}
   if(g.token)api('PATCH',`/groups/${g.token}`,{name}).catch(()=>msg('Renamed here — couldn’t update the shared list name.'));
@@ -525,7 +555,7 @@ function groupView(g){
       <div class="gact">${have(b)?'<button type="button" class="sbtn" disabled>✓ In your books</button>':`<button type="button" class="sbtn pri" data-sid="${esc(b.id)}">Add to Want to read</button>`}</div></div>`).join('')
       :`<div class="empty">No shared books yet.<br>Books you save with this group show up here.</div>`;
     gl.querySelectorAll('[data-sid]').forEach(btn=>btn.onclick=()=>{const b=books.find(x=>x.id===btn.dataset.sid);
-      db.books.push({status:'want',title:b.title,author:b.author,cover:b.cover,cat:b.cat,genre:b.genre,pages:b.pages,year:b.year||'',publisher:b.publisher||'',by:b.rec||b.by,dateRec:b.dateRec||'',about:b.about||'',groups:[g.name],review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
+      db.books.push({status:'want',title:b.title,author:b.author,cover:b.cover,cat:b.cat,genre:b.genre,pages:b.pages,year:b.year||'',publisher:b.publisher||'',by:b.rec||b.by,dateRec:b.dateRec||'',about:b.about||'',groups:[g.name],gst:{[g.name]:'want'},review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
       save();btn.disabled=true;btn.classList.remove('pri');btn.textContent='✓ Added to Want to read'})};
   api('GET',`/groups/${g.token}`).then(d=>{if(d.view&&g.view!==d.view){g.view=d.view;save()}draw(d.books)}).catch(e=>{st.textContent=e.status===404?'This shared list no longer exists.':'Couldn’t load the shared list — check your connection.'});
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;
