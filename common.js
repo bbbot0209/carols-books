@@ -1,4 +1,4 @@
-// Shared by index.html (Carol's app) and group.html (the limited group page).
+// Shared by index.html (Carol's app) and group.html (the limited group page). App name: Book Club Lists.
 const API='https://bbs-mac-mini.tail532c1c.ts.net/books-api';
 const SHARE_BASE=new URL('group.html#',location.href).href.replace(/#.*/,'')+'#';
 const $=s=>document.querySelector(s);
@@ -129,8 +129,77 @@ function fillPicked(f,b){const fv=n=>f.querySelector(`[name=${n}]`),seq=f._pick=
   olAbout(b.key).then(a=>a||ap.then(x=>x.about)).then(a=>late('about',a));
   olEdition(b.key).then(e=>{late('pages',e.pages);late('year',e.year);return ap}).then(x=>{late('year',x.year);late('cover',x.cover);
     if(x.genres){const g=guessGenre(x.genres);if(g.cat){late('cat',g.cat);if(fv('cat')&&fv('cat').value===g.cat)late('genre',g.genre)}}})}
+// ---------- book list display (Book Details / Table / Summary + Print), shared by index.html and group.html ----------
+const STL={read:'Read',want:'Want to read'};
+const okSt=s=>s==='read'||s==='want';
+const gsOf=b=>Array.isArray(b.groups)?b.groups:b.group?String(b.group).split(',').map(x=>x.trim()).filter(Boolean):[];
+const gstOf=(b,g)=>okSt((b.gst||{})[g])?b.gst[g]:b.status;
+const fmtDate=d=>{if(!d)return'';const[y,m,day]=d.split('-');return day?new Date(y,m-1,day).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):m?new Date(y,m-1).toLocaleString(undefined,{month:'short',year:'numeric'}):y};
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+// Table columns = the book fields (Carol 11/8: "each field is a column"); tap a header to sort. group.html uses a subset.
+const COLS=[['title','Title'],['author','Author'],['status','Status'],['cat','Category'],['genre','Genre'],['pages','Pages',1],['year','Year published',1],['date','Date read'],['rating','Rating',1],['by','Recommended by'],['dateRec','Date recommended'],['group','Groups'],['review','Review link'],['notes','Notes']];
+const DISPS=[['cards','Book Details'],['table','Table'],['summary','Summary']];
+const stPill=(s,g)=>`<span class="pill ${s==='want'?'sw':'sr'}">${g?esc(g)+' · ':''}${STL[s]}</span>`;
+// Page hooks for status. index.html overrides them (per-group status + filters); these defaults suit group.html,
+// where each book has one status for that group, or none (books added by members) → no pill, "Other books" in Summary.
+const BV={stOf:b=>okSt(b.status)?b.status:'',stPills:b=>okSt(b.status)?stPill(b.status):'',stCell:b=>STL[b.status]||''};
+function sortBy(items,d,cols=COLS){const c=cols.find(c=>c[0]===d.k);if(!c)return items;const[k,,num]=c;
+  const val=b=>{const v=k==='group'?gsOf(b).join(', '):k==='status'?BV.stOf(b):b[k];return num?(parseFloat(v)||null):String(v??'').trim().toLowerCase()||null};
+  return items.sort((a,b)=>{const x=val(a),y=val(b);if(x===null||y===null)return x===y?0:x===null?1:-1;   // blanks always last
+    return (num?x-y:x.localeCompare(y))*d.dir})}
+// Summary (Carol 11/8): just Title, Author, Category, Pages — split into Want to read / Read, each with its page total.
+const summaryHtml=(items,pr)=>['want','read',''].map(st=>{const it=items.filter(b=>BV.stOf(b)===st);if(!it.length)return'';
+  const pgs=it.reduce((t,b)=>t+(parseInt(b.pages)||0),0);
+  return `<div class="sh2">${STL[st]||'Other books'} <span>${it.length} book${it.length===1?'':'s'}${pgs?` · ${pgs.toLocaleString()} pages`:''}</span></div><div class="sl">`+
+    it.map(b=>`<div class="sr1" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span class="m">${[b.author,b.cat,pr&&b.year].filter(Boolean).map(x=>` · ${esc(x)}`).join('')}</span><span class="p">${b.pages?esc(b.pages)+' pages':''}</span></div>`).join('')+'</div>'}).join('');
+function cell(b,k,pr){const v=k==='group'?gsOf(b).join(', '):b[k];
+  if(k==='status')return BV.stCell(b);
+  if(k==='date'||k==='dateRec')return v?fmtDate(v):'';
+  if(k==='rating')return v?`<span class="stars">${'★'.repeat(v)}</span>`:'';
+  if(k==='review')return /^https?:\/\/\S+$/i.test(v||'')?(pr?esc(v.replace(/^https?:\/\/(www\.)?/i,'').split('/')[0]):`<a href="${esc(v)}" target="_blank" rel="noopener">Review ↗</a>`):'';
+  if(k==='notes')return esc(!pr&&(v||'').length>90?v.slice(0,90).replace(/\s+\S*$/,'')+'…':v);
+  return esc(v)}
+const tableHtml=(items,pr,cols=COLS,d={})=>`<div class="tw"><table class="bt"><thead><tr>${cols.map(([k,l])=>`<th data-k="${k}"${!pr&&d.k===k?' class="on"':''}>${l}${!pr&&d.k===k?(d.dir>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead>
+  <tbody>${items.map(b=>`<tr data-id="${esc(b.id)}">${cols.map(([k])=>`<td${k==='notes'?' class="nt"':''}>${cell(b,k,pr)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+// One book card. Book shape = Carol's library (by = recommended by); group.html maps shared books to it (addedBy, _mine).
+const cardHtml=(b,pr)=>`
+      <div class="card${coverImg(b)?' hc':''}" data-id="${esc(b.id)}">${coverImg(b)}${b._mine?'<span class="mine">Edit</span>':''}
+        <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
+        <div class="meta">
+          ${BV.stPills(b,pr)}
+          ${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}
+          ${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}
+          ${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}
+          ${b.status==='read'&&b.date?`<span class="pill">${fmtDate(b.date)}</span>`:''}
+          ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
+          ${recPill({rec:b.by,dateRec:b.dateRec})}${b.addedBy?`<span class="pill">added by ${esc(b.addedBy)}</span>`:''}
+        </div>
+        ${aboutHtml(b)}${reviewHtml(b)}
+        ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
+      </div>`;
+// The list body for a display mode, and the count row above it: "N books   Book Details · Table · Summary   Print · Print titles".
+const listHtml=(items,d,cols=COLS)=>d.mode==='table'?tableHtml(items,false,cols,d):d.mode==='summary'?summaryHtml(items):items.map(b=>cardHtml(b)).join('');
+const crowHtml=(countHtml,d,any)=>`<div class="crow"><div class="count">${countHtml}</div><span class="dsp">${DISPS.map(([m,l])=>`<button type="button" data-m="${m}"${d.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${any?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`;
+// Wire the display switch, table header sorting (keeps the sideways scroll) and the two print buttons.
+function wireDisp(L,d,saveD,rerender,print){
+  L.querySelectorAll('.dsp button').forEach(x=>x.onclick=()=>{d.mode=x.dataset.m;saveD();rerender()});
+  L.querySelectorAll('.bt th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;d.dir=d.k===k?-d.dir:1;d.k=k;saveD();
+    const tw=th.closest('.tw'),j=[...L.querySelectorAll('.tw')].indexOf(tw),sx=tw.scrollLeft;
+    rerender();const t2=L.querySelectorAll('.tw')[j];if(t2)t2.scrollLeft=sx});
+  L.querySelector('.prc')?.addEventListener('click',()=>print(false));
+  L.querySelector('.prt')?.addEventListener('click',()=>print(true));
+}
+// Print: "Print" = the current display (cards, landscape table, or summary); "Print titles" = numbered Title — Author list.
+const titlesHtml=items=>`<ol>${items.map(b=>`<li>${esc(b.title)}${b.author?` <i>— ${esc(b.author)}</i>`:''}${[b.year&&'published '+esc(b.year),b.pages&&esc(b.pages)+' pages'].filter(Boolean).map(x=>` · ${x}`).join('')}</li>`).join('')}</ol>`;
+const printHead=(title,sub,n)=>`<h1>${esc(title)}</h1><div class="pd">${sub?esc(sub)+' · ':''}${n} book${n===1?'':'s'} · printed ${fmtDate(today())}</div>`;
+function printBooks(items,head,titles,mode,cols=COLS){
+  $('#pv').innerHTML=head+(titles?titlesHtml(items):mode==='table'?tableHtml(items,true,cols):mode==='summary'?summaryHtml(items,true):items.map(b=>cardHtml(b,true)).join(''));
+  let pg=$('#pgs');if(!pg){pg=document.createElement('style');pg.id='pgs';document.head.append(pg)}
+  pg.textContent=!titles&&mode==='table'?'@page{size:landscape}':'';
+  setTimeout(()=>window.print(),50);
+}
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261108j';
+const APPV='20261108k';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});

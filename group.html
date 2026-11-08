@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Book group">
+<meta name="apple-mobile-web-app-title" content="Book Club Lists">
 <meta name="theme-color" content="#f6f1e7">
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
-<title>Book group</title>
+<title>Book Club Lists</title>
 <style>
   :root{--bg:#f6f1e7;--card:#fffdf8;--ink:#2b2420;--mute:#8a7f74;--line:#e6ddcf;--acc:#8c3b2e;--acc2:#2f5d50}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -68,6 +68,45 @@
   .ac img,.ac i{flex:0 0 30px;height:44px;border-radius:3px;object-fit:cover;background:#efe7d8}
   .ac>.hint{display:block;cursor:default;font-size:12px;color:var(--mute);padding:6px 10px}
   .ac p{margin:0;min-width:0}.ac b{display:block;font:600 15px/1.25 Georgia,serif}.ac span{font-size:13px;color:var(--mute)}
+  /* Display switch, table, summary and print view: same rules as index.html */
+  .stars{color:#c08a1e;letter-spacing:1px}
+  .pill.sr{background:#dde9e4;color:var(--acc2);font-weight:600} .pill.sw{background:#fbeccd;color:#8a5a00;font-weight:600}
+  .crow{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;margin:4px 2px 10px}.crow button,.crow .count{white-space:nowrap}.crow .count{flex:1;margin:0}
+  .crow button{background:none;border:0;color:var(--acc2);font-size:14px;text-decoration:underline;padding:4px 2px}
+  .tw{overflow:auto;max-height:calc(100vh - 150px);border:1px solid var(--line);border-radius:12px;background:var(--card);-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  table.bt{border-collapse:separate;border-spacing:0;font-size:14px;min-width:100%}
+  .bt th,.bt td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap;background:var(--card)}
+  .bt th{position:sticky;top:0;z-index:2;background:#efe7d8;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer;user-select:none;-webkit-user-select:none}
+  .bt th.on{color:var(--acc)}
+  .bt th:first-child,.bt td:first-child{position:sticky;left:0;z-index:1;white-space:normal;min-width:120px;max-width:150px;border-right:1px solid var(--line)}
+  .bt th:first-child{z-index:3}
+  .bt td:first-child{font:600 14px/1.3 Georgia,serif}
+  .bt td.nt{white-space:normal;min-width:180px;max-width:260px}
+  .bt td a{color:var(--acc2)}.bt .stars{font-size:13px}
+  .bt tr:active td{background:#f3ece0}
+  .crow .dsp{display:flex;gap:2px}.crow .dsp button{text-decoration:none;color:var(--ink);opacity:.55;padding:4px 5px}.crow .dsp button.on{opacity:1;font-weight:600;color:var(--acc2);text-decoration:underline}
+  .sh2{font:600 16px Georgia,serif;margin:14px 2px 6px}.sh2 span{font:400 13px system-ui,sans-serif;opacity:.65;margin-left:6px}
+  .sl{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
+  .sr1{display:flex;align-items:baseline;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;white-space:nowrap;cursor:pointer}
+  .sr1 b,.sr1 .m{overflow:hidden;text-overflow:ellipsis;min-width:0}.sr1 b{flex:0 1 auto;max-width:72%}.sr1 .m{flex:1 1 0;opacity:.8;margin-left:4px}.sr1 .p{flex:none;margin-left:8px;opacity:.7}.sr1:last-child{border-bottom:0}.sr1:active{background:#f3ece0}
+  .sr1 b{font:600 13px Georgia,serif}
+  #pv{display:none}
+  @media print{
+    body{background:#fff;padding:0;font-size:12pt}
+    body>*:not(#pv){display:none!important}
+    #pv{display:block}
+    #pv h1{font-size:20pt;margin:0 0 2pt}#pv .pd{color:#555;font-size:11pt;margin:0 0 12pt}
+    #pv .card{border:1px solid #ccc;break-inside:avoid;page-break-inside:avoid;background:#fff}
+    #pv .pill{background:none;border:1px solid #ccc}
+    @page{margin:12mm}
+    #pv .tw{overflow:visible;max-height:none;border:0}
+    #pv .sl{border:0;border-radius:0}#pv .sr1{padding:2pt 0;font-size:10pt;border-bottom:1px solid #ddd;break-inside:avoid}#pv .sr1 b{max-width:none}
+    #pv table.bt{font-size:8.5pt;width:100%}
+    #pv .bt th,#pv .bt td{position:static;white-space:normal;padding:3pt 4pt;border-bottom:1px solid #ccc;background:#fff;max-width:none;min-width:0}
+    #pv .bt th{background:#eee}#pv .bt td:first-child{border-right:0;font-size:9pt}
+    #pv .bt tr{break-inside:avoid}
+    #pv ol{margin:0;padding-left:24pt}#pv li{margin:0 0 4pt;break-inside:avoid}#pv li i{font-style:normal;color:#555}
+  }
 </style>
 </head>
 <body>
@@ -77,35 +116,49 @@
   <input id="q" type="search" placeholder="Search title, author, person…">
 </header>
 <main id="list"><div class="count">Loading…</div></main>
+<div id="pv"></div>
 <button class="fab" id="add" aria-label="Add a book" hidden>+</button>
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
-<script src="common.js?v=20261108j"></script>
+<script src="common.js?v=20261108k"></script>
 <script>
 const LKEY='carol-books-group';
 const me=JSON.parse(localStorage.getItem(LKEY)||'null')||{name:'',mine:{}};
 const saveMe=()=>localStorage.setItem(LKEY,JSON.stringify(me));
-let tok='',books=null,loading=false,ro=false;  // ro = opened with the view-only link
+let tok='',gname='',books=null,loading=false,ro=false;  // ro = opened with the view-only link
+// Same display switch + print as Carol's page (Book Details / Table / Summary, Print, Print titles), own saved choice.
+let disp={mode:'cards',k:'',dir:1,...(JSON.parse(localStorage.getItem('carol-books-gdisp')||'null')||{})};
+const saveDisp=()=>localStorage.setItem('carol-books-gdisp',JSON.stringify(disp));
+// Table columns: hers minus the ones a group list doesn't have (date read, rating, groups), plus who added it.
+const GCOLS=[...COLS.filter(c=>!['date','rating','group','review','notes'].includes(c[0])),['addedBy','Added by'],...COLS.filter(c=>['review','notes'].includes(c[0]))];
+// A shared book in the shape the common.js renderers use: by = recommended by (rec), addedBy = who added it,
+// status = Carol's status for this group ('' for books added by members → no pill, "Other books" in Summary).
+const view_=b=>({...b,by:b.rec||'',addedBy:b.by||'',status:okSt(b.status)?b.status:'',_mine:!ro&&mine().includes(b.id)});
 const mine=()=>me.mine[tok]||(me.mine[tok]=[]);
 
 function bad(){document.title='Link not valid';document.body.innerHTML=`<div class="bad"><h1>This link isn’t valid</h1>It may have been mistyped or the group was removed.<br>Ask whoever shared it for a fresh link.</div>`}
 
 async function load(){
   if(loading)return;loading=true;
-  try{const d=await api('GET',`/groups/${tok}`);books=d.books;ro=!!d.readonly;$('#gname').textContent=d.name;document.title=d.name;$('#add').hidden=ro;if(ro&&$('#dlg').open)close();render()}
+  try{const d=await api('GET',`/groups/${tok}`);books=d.books;ro=!!d.readonly;gname=d.name;$('#gname').textContent=d.name;document.title=d.name+' · Book Club Lists';$('#add').hidden=ro;if(ro&&$('#dlg').open)close();render()}
   catch(e){if(e.status===404)return bad();if(!books)$('#list').innerHTML=`<div class="empty">Couldn’t load the book list.<br>Check your connection — it will retry.</div>`;else msg('Offline — showing the last list.')}
   finally{loading=false}
 }
+function shown(){
+  const q=$('#q').value.toLowerCase();
+  const it=books.filter(b=>!q||[b.title,b.author,b.by,b.rec,b.genre,b.notes,b.reviewText,b.about].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.added-a.added).map(view_);
+  return disp.mode!=='cards'?sortBy(it,disp,GCOLS):it;
+}
 function render(){
   if(!books)return;
-  const q=$('#q').value.toLowerCase(),M=ro?[]:mine();
-  const items=books.filter(b=>!q||[b.title,b.author,b.by,b.rec,b.genre,b.notes,b.reviewText,b.about].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.added-a.added);
-  $('#list').innerHTML=`<div class="count">${items.length}${items.length!==books.length?' of '+books.length:''} book${books.length===1?'':'s'}</div>`+(items.length?items.map(b=>`
-    <div class="card${coverImg(b)?' hc':''}" data-id="${esc(b.id)}">${coverImg(b)}${M.includes(b.id)?'<span class="mine">Edit</span>':''}
-      <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
-      <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}${recPill(b)}${b.by?`<span class="pill">added by ${esc(b.by)}</span>`:''}</div>
-      ${aboutHtml(b)}${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
-    </div>`).join(''):`<div class="empty">${books.length?'Nothing matches.':ro?'No books yet.':'No books yet.<br>Tap + to share one with the group.'}</div>`);
-  if(!ro)$('#list').querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName!=='A'&&M.includes(el.dataset.id))edit(el.dataset.id)});
+  const items=shown(),n=books.length,L=$('#list');
+  L.innerHTML=crowHtml(`${items.length}${items.length!==n?' of '+n:''} book${n===1?'':'s'}`,disp,items.length)+
+    (items.length?listHtml(items,disp,GCOLS):`<div class="empty">${n?'Nothing matches.':ro?'No books yet.':'No books yet.<br>Tap + to share one with the group.'}</div>`);
+  wireDisp(L,disp,saveDisp,render,printView);
+  if(!ro)L.querySelectorAll('.card,.sr1,.bt tr[data-id]').forEach(el=>el.onclick=e=>{if(!e.target.closest('a')&&mine().includes(el.dataset.id))edit(el.dataset.id)});
+}
+function printView(titles){
+  const items=shown(),q=$('#q').value.trim();
+  printBooks(items,printHead(gname||'Book Club Lists',q?`“${q}”`:'',items.length),titles,disp.mode,GCOLS);
 }
 
 const close=()=>$('#dlg').close();
