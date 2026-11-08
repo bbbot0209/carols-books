@@ -48,7 +48,7 @@ const OL='https://openlibrary.org/search.json?limit=8&fields=key,title,author_na
 const olNorm=t=>(t||'').toLowerCase().replace(/[\u2018\u2019'`]/g,' ').replace(/[^\p{L}\p{N} ]+/gu,' ').replace(/\s+/g,' ').trim();
 // Apple Books store search ranks titles like a store/Google does ("Land" → Maggie O'Farrell first); keyless, CORS-open.
 const apFind=(q,signal)=>fetch('https://itunes.apple.com/search?media=ebook&entity=ebook&limit=8&term='+encodeURIComponent(q),{signal}).then(r=>r.json())
-  .then(j=>(j.results||[]).map(x=>({ap:1,title:x.trackName.replace(/:? A Novel$/i,''),author_name:[x.artistName],first_publish_year:(x.releaseDate||'').slice(0,4),art:x.artworkUrl60||'',genres:x.genres||[]}))).catch(()=>[]);
+  .then(j=>(j.results||[]).map(x=>({ap:1,title:x.trackName.replace(/:? A Novel$/i,''),author_name:[x.artistName],first_publish_year:(x.releaseDate||'').slice(0,4),art:x.artworkUrl60||'',art100:x.artworkUrl100||'',genres:x.genres||[]}))).catch(()=>[]);
 // Apple results first, then Open Library, deduped on title+first author.
 async function bookFind(q,signal){const [a,o]=await Promise.all([apFind(q,signal),olFind(q,signal).catch(()=>[])]);if(signal.aborted)throw 0;
   const k=x=>olNorm(x.title)+'|'+olNorm((x.author_name||[])[0]).split(' ').pop(),seen=new Set();
@@ -87,8 +87,8 @@ function bookAC(inp,pick){
   box.addEventListener('mousedown',e=>e.preventDefault());
   box.addEventListener('click',async e=>{const el=e.target.closest('[data-i]');let x=el&&docs[+el.dataset.i];if(!x)return;seq++;hide();inp.blur();
     if(x.ap){const a=x,m=await olMatch(a.title,a.author_name[0]);const g=guessGenre(a.genres);
-      x={...(m||{}),title:a.title,author_name:a.author_name,first_publish_year:a.first_publish_year||(m&&m.first_publish_year),subject:g.cat?a.genres:(m&&m.subject)||a.genres}}
-    pick({key:/^\/works\/OL\w+$/.test(x.key||'')?x.key:'',title:x.title,author:(x.author_name||[])[0]||'',pages:x.number_of_pages_median||'',year:x.first_publish_year||'',cover:x.cover_i?`https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg`:'',...guessGenre(x.subject)})});
+      x={...(m||{}),title:a.title,author_name:a.author_name,first_publish_year:a.first_publish_year||(m&&m.first_publish_year),subject:g.cat?a.genres:(m&&m.subject)||a.genres,art100:a.art100}}
+    pick({key:/^\/works\/OL\w+$/.test(x.key||'')?x.key:'',title:x.title,author:(x.author_name||[])[0]||'',pages:x.number_of_pages_median||'',year:x.first_publish_year||'',cover:x.cover_i?`https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg`:apCover(x.art100),...guessGenre(x.subject)})});
 }
 // Best edition of a work for pages/publisher/year: prefer English, then editions that have those fields.
 const olEdition=async k=>{if(!k)return{};try{const es=(await (await fetch('https://openlibrary.org'+k+'/editions.json?limit=50')).json()).entries||[];
@@ -102,24 +102,32 @@ const olAbout=async k=>{if(!k)return'';try{const d=await (await fetch('https://o
 const aboutHtml=b=>b.about?`<div class="about">${esc(b.about.length>240?b.about.slice(0,240).replace(/\s+\S*$/,'')+'…':b.about)}</div>`:'';
 const recPill=b=>(b.rec||b.dateRec)?`<span class="pill">rec.${b.rec?' by '+esc(b.rec):''}${b.dateRec?(b.rec?' · ':' ')+fmtDay(b.dateRec):''}</span>`:'';
 const fmtDay=d=>{const[y,m,dd]=(d||'').split('-');return y&&m&&dd?new Date(y,m-1,dd).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):esc(d)};
-const coverImg=b=>/^https:\/\/covers\.openlibrary\.org\/\S+$/.test(b.cover||'')?`<img class="cv" src="${esc(b.cover)}" alt="" loading="lazy" onerror="this.remove()">`:'';
+const COVER_RE=/^https:\/\/(covers\.openlibrary\.org\/b\/id\/\d{1,12}-[SML]\.jpg|is\d-ssl\.mzstatic\.com\/image\/thumb\/[\w.%\/-]{1,400}\/\d{2,4}x\d{2,4}bb\.jpg)$/;
+// Apple Books artwork, resized; only used when Open Library has no cover.
+const apCover=u=>{u=String(u||'').replace(/\/\d{2,4}x\d{2,4}bb\.(jpg|png)$/,'/300x300bb.jpg');return COVER_RE.test(u)?u:''};
+const coverImg=b=>COVER_RE.test(b.cover||'')?`<img class="cv" src="${esc(b.cover)}" alt="" loading="lazy" onerror="this.remove()">`:'';
 
-// Fill a book form from a picked suggestion: title/author always, the rest only into empty fields.
+// Fill a book form from a picked suggestion. Same behavior in every form (Carol's add + edit, group.html):
+// picking a title REPLACES every autofillable field (author, pages, year, category, genre, about, cover) with the
+// picked book's values — so a re-pick or a pick in the edit form never leaves another book's details behind.
+// Values that arrive later (OL edition, OL description, Apple Books) fill only fields still blank, and are dropped
+// if a newer pick happened meanwhile. Fields autofill doesn't own (recommended by, dates, group, notes…) are untouched.
 // Apple Books (keyless, CORS-open) backs up Open Library's thin records for new releases: year, genres, blurb.
 const appleBook=async(title,author)=>{try{const last=olNorm(author).split(' ').pop()||'',t=olNorm(title);
   const r=(await (await fetch('https://itunes.apple.com/search?media=ebook&limit=10&term='+encodeURIComponent(title+' '+author))).json()).results||[];
   const x=r.find(x=>olNorm(x.trackName).replace(/ a novel$/,'')===t&&olNorm(x.artistName).includes(last))||r.find(x=>olNorm(x.trackName).startsWith(t)&&olNorm(x.artistName).includes(last));
   if(!x)return{};const d=document.createElement('div');d.innerHTML=(x.description||'').replace(/<br\s*\/?>/gi,'\n');
-  return{year:(x.releaseDate||'').slice(0,4),genres:x.genres||[],about:d.textContent.trim().slice(0,2000)}}catch{return{}}};
-// onCat(b) re-applies category/genre when they arrive late (from Apple Books).
-function fillPicked(f,b,onCat){const fv=n=>f.querySelector(`[name=${n}]`),set=(n,v)=>{const el=fv(n);if(el&&v&&!el.value)el.value=v};
-  fv('title').value=b.title;fv('author').value=b.author;fv('cover').value=b.cover;set('pages',b.pages);set('year',b.year);
+  return{year:(x.releaseDate||'').slice(0,4),genres:x.genres||[],about:d.textContent.trim().slice(0,2000),cover:apCover(x.artworkUrl100)}}catch{return{}}};
+const AUTO=['author','pages','year','cat','genre','about','cover'];
+function fillPicked(f,b){const fv=n=>f.querySelector(`[name=${n}]`),seq=f._pick=(f._pick||0)+1,ti=fv('title'),live=()=>f._pick===seq&&ti.isConnected;   // form rebuilt → old input disconnected
+  const put=(n,v)=>{const el=fv(n);if(el)el.value=v==null?'':String(v)},late=(n,v)=>{const el=fv(n);if(live()&&el&&v&&!el.value)el.value=v};
+  fv('title').value=b.title;AUTO.forEach(n=>put(n,b[n]));
   const ap=appleBook(b.title,b.author);
-  if(!fv('about').value)olAbout(b.key).then(a=>a||ap.then(x=>x.about)).then(a=>set('about',a));
-  olEdition(b.key).then(e=>{set('pages',e.pages);set('year',e.year);
-    return ap}).then(x=>{set('year',x.year);if(!b.cat&&onCat&&x.genres){const g=guessGenre(x.genres);if(g.cat)onCat(g)}})}
+  olAbout(b.key).then(a=>a||ap.then(x=>x.about)).then(a=>late('about',a));
+  olEdition(b.key).then(e=>{late('pages',e.pages);late('year',e.year);return ap}).then(x=>{late('year',x.year);late('cover',x.cover);
+    if(x.genres){const g=guessGenre(x.genres);if(g.cat){late('cat',g.cat);if(fv('cat')&&fv('cat').value===g.cat)late('genre',g.genre)}}})}
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261107g';
+const APPV='20261108a';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});

@@ -79,7 +79,7 @@
 <main id="list"><div class="count">Loading…</div></main>
 <button class="fab" id="add" aria-label="Add a book" hidden>+</button>
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
-<script src="common.js?v=20261107g"></script>
+<script src="common.js?v=20261108a"></script>
 <script>
 const LKEY='carol-books-group';
 const me=JSON.parse(localStorage.getItem(LKEY)||'null')||{name:'',mine:{}};
@@ -127,8 +127,7 @@ function edit(eid){
   f.querySelectorAll('input').forEach(el=>{el.setAttribute('autocomplete','off');el.setAttribute('enterkeyhint','done');el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}})});
   const gi=f.querySelector('[name=genre]'),ci=f.querySelector('[name=cat]'),errEl=f.querySelector('.err');
   const fv=n=>f.querySelector(`[name=${n}]`);
-  const applyCat=b=>{if(!ci.value&&b.cat)ci.value=b.cat;if(!gi.value&&b.genre)gi.value=b.genre};
-  bookAC(fv('title'),b=>{fillPicked(f,b,applyCat);applyCat(b)});
+  bookAC(fv('title'),b=>fillPicked(f,b));
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');
   if(del)del.onclick=async()=>{if(!confirm('Remove this book from the group list?'))return;
