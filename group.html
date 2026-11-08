@@ -79,38 +79,39 @@
 <main id="list"><div class="count">Loading…</div></main>
 <button class="fab" id="add" aria-label="Add a book" hidden>+</button>
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
-<script src="common.js?v=20261108g"></script>
+<script src="common.js?v=20261108h"></script>
 <script>
 const LKEY='carol-books-group';
 const me=JSON.parse(localStorage.getItem(LKEY)||'null')||{name:'',mine:{}};
 const saveMe=()=>localStorage.setItem(LKEY,JSON.stringify(me));
-let tok='',books=null,loading=false;
+let tok='',books=null,loading=false,ro=false;  // ro = opened with the view-only link
 const mine=()=>me.mine[tok]||(me.mine[tok]=[]);
 
 function bad(){document.title='Link not valid';document.body.innerHTML=`<div class="bad"><h1>This link isn’t valid</h1>It may have been mistyped or the group was removed.<br>Ask whoever shared it for a fresh link.</div>`}
 
 async function load(){
   if(loading)return;loading=true;
-  try{const d=await api('GET',`/groups/${tok}`);books=d.books;$('#gname').textContent=d.name;document.title=d.name;$('#add').hidden=false;render()}
+  try{const d=await api('GET',`/groups/${tok}`);books=d.books;ro=!!d.readonly;$('#gname').textContent=d.name;document.title=d.name;$('#add').hidden=ro;if(ro&&$('#dlg').open)close();render()}
   catch(e){if(e.status===404)return bad();if(!books)$('#list').innerHTML=`<div class="empty">Couldn’t load the book list.<br>Check your connection — it will retry.</div>`;else msg('Offline — showing the last list.')}
   finally{loading=false}
 }
 function render(){
   if(!books)return;
-  const q=$('#q').value.toLowerCase(),M=mine();
+  const q=$('#q').value.toLowerCase(),M=ro?[]:mine();
   const items=books.filter(b=>!q||[b.title,b.author,b.by,b.rec,b.genre,b.notes,b.reviewText,b.about].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.added-a.added);
   $('#list').innerHTML=`<div class="count">${items.length}${items.length!==books.length?' of '+books.length:''} book${books.length===1?'':'s'}</div>`+(items.length?items.map(b=>`
     <div class="card${coverImg(b)?' hc':''}" data-id="${esc(b.id)}">${coverImg(b)}${M.includes(b.id)?'<span class="mine">Edit</span>':''}
       <div class="t">${esc(b.title)}</div>${b.author?`<div class="a">${esc(b.author)}</div>`:''}
       <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}${recPill(b)}${b.by?`<span class="pill">added by ${esc(b.by)}</span>`:''}</div>
       ${aboutHtml(b)}${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
-    </div>`).join(''):`<div class="empty">${books.length?'Nothing matches.':'No books yet.<br>Tap + to share one with the group.'}</div>`);
-  $('#list').querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName!=='A'&&M.includes(el.dataset.id))edit(el.dataset.id)});
+    </div>`).join(''):`<div class="empty">${books.length?'Nothing matches.':ro?'No books yet.':'No books yet.<br>Tap + to share one with the group.'}</div>`);
+  if(!ro)$('#list').querySelectorAll('.card').forEach(el=>el.onclick=e=>{if(e.target.tagName!=='A'&&M.includes(el.dataset.id))edit(el.dataset.id)});
 }
 
 const close=()=>$('#dlg').close();
 $('#dlg').addEventListener('close',()=>document.documentElement.classList.remove('modal'));
 function edit(eid){
+  if(ro)return;
   const f=$('#f'),it=eid?books.find(b=>b.id===eid)||{}:{};
   f.innerHTML=`<div class="bar"><button type="button" class="cx">Cancel</button><h2>${eid?'Edit book':'Share a book'}</h2><button class="pri">Save</button></div><div class="fb">
     <label>Title</label><input name="title" required maxlength="200" value="${esc(it.title)}"><input type="hidden" name="cover" value="${esc(it.cover)}">

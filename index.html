@@ -161,7 +161,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108g"></script>
+<script src="common.js?v=20261108h"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -484,19 +484,29 @@ function linkBox(title,sub,url,shareTitle){
   d.querySelector('.x').onclick=()=>d.close();
   d.showModal();
 }
+// Share links are VIEW-ONLY (Carol 11/8): g.token = edit token, kept here so her app can push books;
+// g.view = read-only token, the only one that goes into a link. Groups shared before 11/8 fetch theirs.
+async function viewTok(g){
+  if(!g.view&&g.token){try{const d=await api('GET',`/groups/${g.token}`);if(d.view){g.view=d.view;save()}}catch(e){}}
+  return g.view||'';
+}
+async function ensureViews(){for(const g of db.groups)if(g.token&&!g.view)await viewTok(g)}
+const VIEWONLY='They can see the books but can’t add, change or remove anything, and won’t see your own lists.';
 async function shareGroup(g){
   if(!g.name)return;
   if(!g.token){
-    try{const r=await api('POST','/groups',{name:g.name});g.token=r.token;save();render()}
+    try{const r=await api('POST','/groups',{name:g.name});g.token=r.token;g.view=r.view;save();render()}
     catch(e){return msg('Couldn’t make a share link — check your connection and try again.')}
     const mine=db.books.filter(b=>gsOf(b).includes(g.name)&&b.stok!==g.token&&!(b.shared||{})[g.token]);
     if(mine.length&&confirm(`Also add the ${mine.length} book${mine.length===1?'':'s'} already tagged “${g.name}” to the shared list?`)){
       mine.forEach(b=>b.dirty=1);save();if(!(await syncPending()))msg('Some books couldn’t be shared yet — will retry.')}
-    return linkBox('Share link ready',`Anyone with this link can see and add books to “${g.name}”. They won’t see your own lists.`,SHARE_BASE+g.token,g.name);
+    if(!(await viewTok(g)))return msg('Couldn’t make a share link — check your connection and try again.');
+    return linkBox('Share link ready',`Anyone with this link can view “${g.name}”. ${VIEWONLY}`,SHARE_BASE+g.view,g.name);
   }
-  const url=SHARE_BASE+g.token;
+  if(!(await viewTok(g)))return msg('Couldn’t get the share link — check your connection and try again.');
+  const url=SHARE_BASE+g.view;
   if(navigator.share){try{await navigator.share({title:g.name,url});return}catch(e){if(e.name==='AbortError')return}}
-  linkBox('Share link',`Anyone with this link can see and add books to “${g.name}”.`,url,g.name);
+  linkBox('Share link',`Anyone with this link can view “${g.name}”. ${VIEWONLY}`,url,g.name);
 }
 function groupView(g){
   const f=$('#f');
@@ -513,11 +523,11 @@ function groupView(g){
       <div class="meta">${b.cat?`<span class="pill ${b.cat==='Fiction'?'f':'n'}">${esc(b.cat)}</span>`:''}${b.genre?`<span class="pill">${esc(b.genre)}</span>`:''}${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}${recPill(b)}${b.by?`<span class="pill">added by ${esc(b.by)}</span>`:''}</div>
       ${reviewHtml(b)}${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
       <div class="gact">${have(b)?'<button type="button" class="sbtn" disabled>✓ In your books</button>':`<button type="button" class="sbtn pri" data-sid="${esc(b.id)}">Add to Want to read</button>`}</div></div>`).join('')
-      :`<div class="empty">No shared books yet.<br>Books you save with this group, and ones friends add from the link, show up here.</div>`;
+      :`<div class="empty">No shared books yet.<br>Books you save with this group show up here.</div>`;
     gl.querySelectorAll('[data-sid]').forEach(btn=>btn.onclick=()=>{const b=books.find(x=>x.id===btn.dataset.sid);
       db.books.push({status:'want',title:b.title,author:b.author,cover:b.cover,cat:b.cat,genre:b.genre,pages:b.pages,year:b.year||'',publisher:b.publisher||'',by:b.rec||b.by,dateRec:b.dateRec||'',about:b.about||'',groups:[g.name],review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
       save();btn.disabled=true;btn.classList.remove('pri');btn.textContent='✓ Added to Want to read'})};
-  api('GET',`/groups/${g.token}`).then(d=>draw(d.books)).catch(e=>{st.textContent=e.status===404?'This shared list no longer exists.':'Couldn’t load the shared list — check your connection.'});
+  api('GET',`/groups/${g.token}`).then(d=>{if(d.view&&g.view!==d.view){g.view=d.view;save()}draw(d.books)}).catch(e=>{st.textContent=e.status===404?'This shared list no longer exists.':'Couldn’t load the shared list — check your connection.'});
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;
 }
 
@@ -558,11 +568,11 @@ async function shareLib(){
   if(!sync.lib)return msg('Couldn’t set up syncing — check your connection.');
   linkBox('Use on another device','Open this link on your other phone, tablet or computer. Your books will stay in sync. Keep it private — anyone with it can see your lists.',location.origin+location.pathname+'#lib='+sync.lib,'My books');
 }
-addEventListener('focus',()=>{pullLib();syncPending()});
+addEventListener('focus',()=>{pullLib();syncPending();ensureViews()});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullLib();syncPending()}});
 addEventListener('online',()=>{pushLib();syncPending()});
 syncControls();render();
-adoptLink().then(pullLib).then(syncPending);
+adoptLink().then(pullLib).then(syncPending).then(ensureViews);
 </script>
 </body>
 </html>
