@@ -105,7 +105,7 @@
   .fr select.q{flex:0 0 92px}
   .fr input[type=date]{-webkit-appearance:none;appearance:none;min-height:38px}
   .fclr{background:none;border:0;color:var(--acc2);font-size:14px;text-decoration:underline;padding:8px 0 0}
-  .crow{display:flex;align-items:center;gap:8px;margin:4px 2px 10px}.crow .count{flex:1;margin:0}
+  .crow{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;margin:4px 2px 10px}.crow button,.crow .count{white-space:nowrap}.crow .count{flex:1;margin:0}
   .crow button{background:none;border:0;color:var(--acc2);font-size:14px;text-decoration:underline;padding:4px 2px}
   .tw{overflow:auto;max-height:calc(100vh - 150px);border:1px solid var(--line);border-radius:12px;background:var(--card);-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
   table.bt{border-collapse:separate;border-spacing:0;font-size:14px;min-width:100%}
@@ -118,12 +118,13 @@
   .bt td.nt{white-space:normal;min-width:180px;max-width:260px}
   .bt td a{color:var(--acc2)}.bt .stars{font-size:13px}
   .bt tr:active td{background:#f3ece0}
+  .gpk{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.gpk button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:14px;color:var(--ink)}.gpk button.on{background:var(--acc2);border-color:var(--acc2);color:#fff}.gpk button.on::before{content:'✓ '}
   .crow .dsp{display:flex;gap:2px}.crow .dsp button{text-decoration:none;color:var(--ink);opacity:.55;padding:4px 5px}.crow .dsp button.on{opacity:1;font-weight:600;color:var(--acc2);text-decoration:underline}
   .sh2{font:600 16px Georgia,serif;margin:14px 2px 6px}.sh2 span{font:400 13px system-ui,sans-serif;opacity:.65;margin-left:6px}
   .sl{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
-  .sr1{display:flex;align-items:baseline;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap;cursor:pointer}
-  .sr1 b,.sr1 .m{overflow:hidden;text-overflow:ellipsis;min-width:0}.sr1 b{flex:0 1 auto;max-width:58%}.sr1 .m{flex:1 1 auto;opacity:.8;margin-left:4px}.sr1 .p{flex:none;margin-left:8px;opacity:.7}.sr1:last-child{border-bottom:0}.sr1:active{background:#f3ece0}
-  .sr1 b{font:600 13.5px Georgia,serif}
+  .sr1{display:flex;align-items:baseline;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;white-space:nowrap;cursor:pointer}
+  .sr1 b,.sr1 .m{overflow:hidden;text-overflow:ellipsis;min-width:0}.sr1 b{flex:0 1 auto;max-width:72%}.sr1 .m{flex:1 1 0;opacity:.8;margin-left:4px}.sr1 .p{flex:none;margin-left:8px;opacity:.7}.sr1:last-child{border-bottom:0}.sr1:active{background:#f3ece0}
+  .sr1 b{font:600 13px Georgia,serif}
   #pv{display:none}
   @media print{
     body{background:#fff;padding:0;font-size:12pt}
@@ -160,19 +161,24 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108f"></script>
+<script src="common.js?v=20261108g"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
 // Data model (v2, 11/8): ONE table db.books, each book has status 'read' | 'want'. Plus db.groups and db.views
 // (saved filters). Older data had separate db.read / db.want lists — normDb() folds them in losslessly (every field
 // and id kept). It runs on every load/restore/sync, so data pushed by an older cached copy of the app is merged too.
+// A book can belong to several groups (Carol 11/8): b.groups = [names]. Older data had one b.group string.
+// The old single field already held typed lists like "BAIP, Olmsted", so it splits on commas.
+function normGroups(b){const a=[...(Array.isArray(b.groups)?b.groups:[]),...String(b.group??'').split(',')].map(x=>String(x??'').trim()).filter(Boolean);
+  b.groups=[...new Set(a)];delete b.group;return b}
+const gsOf=b=>Array.isArray(b.groups)?b.groups:b.group?String(b.group).split(',').map(x=>x.trim()).filter(Boolean):[];
 function normDb(d){
   d=d&&typeof d==='object'?d:{};
   const books=Array.isArray(d.books)?d.books.filter(b=>b&&typeof b==='object'):[],ids=new Set(books.map(b=>b.id));
-  books.forEach(b=>{if(b.status!=='read'&&b.status!=='want')b.status=b.date||b.rating?'read':'want'});
+  books.forEach(b=>{if(b.status!=='read'&&b.status!=='want')b.status=b.date||b.rating?'read':'want';normGroups(b)});
   for(const st of ['read','want'])(Array.isArray(d[st])?d[st]:[]).forEach(b=>{if(!b||typeof b!=='object')return;
-    if(b.id&&ids.has(b.id))return;if(b.id)ids.add(b.id);books.push({...b,status:st})});
+    if(b.id&&ids.has(b.id))return;if(b.id)ids.add(b.id);books.push(normGroups({...b,status:st}))});
   const o={...d,books,groups:Array.isArray(d.groups)?d.groups:[],views:Array.isArray(d.views)?d.views:[]};
   delete o.read;delete o.want;return o;
 }
@@ -184,6 +190,7 @@ const id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const fmtDate=d=>{if(!d)return'';const[y,m,day]=d.split('-');return day?new Date(y,m-1,day).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):m?new Date(y,m-1).toLocaleString(undefined,{month:'short',year:'numeric'}):y};
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
 const groupNames=()=>db.groups.map(g=>g.name).filter(Boolean);
+const allGroupNames=()=>[...new Set([...groupNames(),...db.books.flatMap(gsOf)])];   // groups screen + any typed on a book
 const STL={read:'Read',want:'Want to read'};
 
 // ---------- views (filters) ----------
@@ -194,7 +201,7 @@ const cmp=(v,q,x)=>q==='before'?v<x:q==='after'?v>x:(v===x||(x.startsWith(v+'-')
 const fold=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/['’]/g,'');
 function matches(b,v=view){
   if(v.status&&b.status!==v.status)return false;
-  if(v.group&&b.group!==v.group)return false;
+  if(v.group&&!gsOf(b).includes(v.group))return false;
   if(v.cat&&b.cat!==v.cat&&b.genre!==v.cat)return false;
   if(v.pubQ&&/^\d{3,4}$/.test(v.pubY)){const y=parseInt(b.year);if(!y||!(v.pubQ==='before'?y<+v.pubY:v.pubQ==='after'?y>+v.pubY:y===+v.pubY))return false}
   if(v.recQ&&v.recD){if(!b.dateRec||!cmp(b.dateRec,v.recQ,v.recD))return false}
@@ -202,7 +209,7 @@ function matches(b,v=view){
   // Search = every typed word starts a word in her own fields (title, author, recommended by, group, genre, notes).
   // Not the auto-filled blurb, and not mid-word: "Land" must not match "island" in a description (Carol 11/8).
   const qs=fold(v.q||'').split(/\s+/).filter(Boolean);if(!qs.length)return true;
-  const ws=fold([b.title,b.author,b.by,b.group,b.genre,b.notes].join(' ')).split(/[^a-z0-9]+/).filter(Boolean);
+  const ws=fold([b.title,b.author,b.by,...gsOf(b),b.genre,b.notes].join(' ')).split(/[^a-z0-9]+/).filter(Boolean);
   return qs.every(q=>ws.some(w=>w.startsWith(q.replace(/[^a-z0-9]/g,''))));
 }
 function describe(v=view){
@@ -223,9 +230,9 @@ function sortBooks(items){
 // Cards or Table display (Carol 11/8: "each field is a column"). Table columns = the book fields, tap a header to sort.
 let disp={mode:'cards',k:'',dir:1,...(JSON.parse(localStorage.getItem('carol-books-disp')||'null')||{})};
 const saveDisp=()=>localStorage.setItem('carol-books-disp',JSON.stringify(disp));
-const COLS=[['title','Title'],['author','Author'],['status','Status'],['cat','Category'],['genre','Genre'],['pages','Pages',1],['year','Year published',1],['date','Date read'],['rating','Rating',1],['by','Recommended by'],['dateRec','Date recommended'],['group','Group'],['review','Review link'],['notes','Notes']];
+const COLS=[['title','Title'],['author','Author'],['status','Status'],['cat','Category'],['genre','Genre'],['pages','Pages',1],['year','Year published',1],['date','Date read'],['rating','Rating',1],['by','Recommended by'],['dateRec','Date recommended'],['group','Groups'],['review','Review link'],['notes','Notes']];
 function sortBy(items){const c=COLS.find(c=>c[0]===disp.k);if(!c)return items;const[k,,num]=c;
-  const val=b=>{const v=b[k];return num?(parseFloat(v)||null):String(v??'').trim().toLowerCase()||null};
+  const val=b=>{const v=k==='group'?gsOf(b).join(', '):b[k];return num?(parseFloat(v)||null):String(v??'').trim().toLowerCase()||null};
   return items.sort((a,b)=>{const x=val(a),y=val(b);if(x===null||y===null)return x===y?0:x===null?1:-1;   // blanks always last
     return (num?x-y:x.localeCompare(y))*disp.dir})}
 const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return disp.mode!=='cards'?sortBy(it):it};
@@ -233,8 +240,8 @@ const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return disp.
 const summaryHtml=(items,pr)=>['want','read'].map(st=>{const it=items.filter(b=>b.status===st);if(!it.length)return'';
   const pgs=it.reduce((t,b)=>t+(parseInt(b.pages)||0),0);
   return `<div class="sh2">${STL[st]} <span>${it.length} book${it.length===1?'':'s'}${pgs?` · ${pgs.toLocaleString()} pages`:''}</span></div><div class="sl">`+
-    it.map(b=>`<div class="sr1" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span class="m">${[b.author,b.cat].filter(Boolean).map(x=>` · ${esc(x)}`).join('')}</span><span class="p">${b.pages?esc(b.pages)+' p':''}</span></div>`).join('')+'</div>'}).join('');
-function cell(b,k,pr){const v=b[k];
+    it.map(b=>`<div class="sr1" data-id="${esc(b.id)}"><b>${esc(b.title)}</b><span class="m">${[b.author,b.cat].filter(Boolean).map(x=>` · ${esc(x)}`).join('')}</span><span class="p">${b.pages?esc(b.pages)+' pages':''}</span></div>`).join('')+'</div>'}).join('');
+function cell(b,k,pr){const v=k==='group'?gsOf(b).join(', '):b[k];
   if(k==='status')return STL[v]||'';
   if(k==='date'||k==='dateRec')return v?fmtDate(v):'';
   if(k==='rating')return v?`<span class="stars">${'★'.repeat(v)}</span>`:'';
@@ -255,7 +262,7 @@ $('#grpbtn').onclick=()=>{if(mode==='groups')return showBooks();mode='groups';$(
 const sel=(cls,opts,v)=>`<select class="${cls}">${opts.map(([val,l])=>`<option value="${esc(val)}"${val===v?' selected':''}>${esc(l)}</option>`).join('')}</select>`;
 // Carol 11/8: all view fields on one line (scrolls sideways on a phone); every field defaults to "any".
 function filterPanel(){
-  const gs=groupNames();if(view.group&&!gs.includes(view.group))gs.push(view.group);
+  const gs=allGroupNames();if(view.group&&!gs.includes(view.group))gs.push(view.group);
   const n=extra(view)+(view.status?1:0),Q=a=>[['','any'],...a.map(x=>[x,x])];
   return `<div class="fline">
     <span class="flbl">Filter</span>
@@ -289,7 +296,7 @@ const cardHtml=(b,pr)=>`
           ${b.status==='read'&&b.date?`<span class="pill">${fmtDate(b.date)}</span>`:''}
           ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
           ${recPill({rec:b.by,dateRec:b.dateRec})}
-          ${b.group?`<span class="pill">${esc(b.group)}</span>`:''}
+          ${gsOf(b).map(g=>`<span class="pill">${esc(g)}</span>`).join('')}
         </div>
         ${aboutHtml(b)}${reviewHtml(b)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
@@ -299,12 +306,12 @@ function render(keepOpen,refocus){
   const L=$('#list');
   if(mode==='groups'){
     L.innerHTML=db.groups.length?db.groups.map(g=>{
-      const recs=db.books.filter(b=>b.group===g.name).length;
+      const recs=db.books.filter(b=>gsOf(b).includes(g.name)).length;
       return `<div class="card" data-id="${g.id}"><div class="t">${esc(g.name)}</div>${g.members?`<div class="a">${esc(g.members)}</div>`:''}<div class="meta">${g.meets?`<span class="pill">${esc(g.meets)}</span>`:''}<span class="pill">${recs} book${recs===1?'':'s'}</span>${g.token?'<span class="pill sh">Shared</span>':''}</div>${g.notes?`<div class="note">${link(g.notes)}</div>`:''}<div class="gact">${g.token?'<button type="button" class="open">Shared list</button>':''}<button type="button" class="share">Share link</button></div></div>`}).join('')
       :`<div class="empty">No book groups yet.<br>Tap + to add one.</div>`;
   }else{
     const items=shown(),n=db.books.length;
-    L.innerHTML=filterPanel()+`<div class="crow"><div class="count">${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}</div><span class="dsp">${[['cards','Cards'],['table','Table'],['summary','Summary']].map(([m,l])=>`<button type="button" data-m="${m}"${disp.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${items.length?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`+
+    L.innerHTML=filterPanel()+`<div class="crow"><div class="count">${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}</div><span class="dsp">${[['cards','Book Details'],['table','Table'],['summary','Summary']].map(([m,l])=>`<button type="button" data-m="${m}"${disp.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${items.length?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`+
       (items.length?(disp.mode==='table'?tableHtml(items):disp.mode==='summary'?summaryHtml(items):items.map(b=>cardHtml(b)).join('')):`<div class="empty">${view.q?`“${esc(view.q)}” isn’t in your books yet.<div class="olr ac"><div class="hint">Searching online…</div></div><button type="button" class="addq">Add “${esc(view.q)}” yourself</button>`:n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
     wireFilters(L);
     L.querySelectorAll('.dsp button').forEach(x=>x.onclick=()=>{disp.mode=x.dataset.m;saveDisp();render()});
@@ -368,7 +375,7 @@ function edit(eid,pre){
       <label>When it meets</label><input name="meets" value="${esc(it.meets)}" placeholder="2nd Tuesday">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
   }else{
-    const gl=groupNames(),read=st.status==='read';
+    const read=st.status==='read';st.groups=[...gsOf(it)];const gpick=allGroupNames();
     f.innerHTML=`${bar(eid?'Edit book':'New book')}<div class="fb">
       <label>Status</label><div class="seg st">${['read','want'].map(s=>`<button type="button" data-s="${s}" class="${st.status===s?'on':''}">${STL[s]}</button>`).join('')}</div>
       <label>Title</label><input name="title" required value="${esc(it.title)}"><input type="hidden" name="cover" value="${esc(it.cover)}">
@@ -378,7 +385,7 @@ function edit(eid,pre){
       <div class="row"><div><label>Category</label><input name="cat" value="${esc(it.cat)}" placeholder="Fills in automatically"></div><div style="flex:2"><label>Genre</label><input name="genre" value="${esc(it.genre)}" placeholder="Fills in automatically"></div></div>
       <div class="rd"${read?'':' hidden'}><label>Date read</label><input name="date" type="date" value="${esc(/^\d{4}-\d{2}$/.test(it.date||'')?it.date+'-01':it.date)}">
       <label>My rating</label><div class="rate">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" class="${(it.rating||0)>=n?'on':''}">★</button>`).join('')}</div></div>
-      <label>Book group</label><input name="group" list="gl" value="${esc(it.group)}"><datalist id="gl">${gl.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+      <label>Book groups</label>${gpick.length?`<div class="gpk">${gpick.map(g=>`<button type="button" class="${st.groups.includes(g)?'on':''}">${esc(g)}</button>`).join('')}</div>`:''}<input name="gnew" placeholder="${gpick.length?'Another group — type its name':'Group name'}">
       <label>About the book</label><textarea name="about" placeholder="Fills in when you pick a suggested title">${esc(it.about)}</textarea>
       <label>Review link</label><input name="review" type="url" inputmode="url" value="${esc(it.review)}" placeholder="https://…">
       <label>Notes</label><textarea name="notes">${esc(it.notes)}</textarea>`;
@@ -389,11 +396,13 @@ function edit(eid,pre){
   f.querySelectorAll('.st button').forEach(b=>b.onclick=()=>{st.status=b.dataset.s;f.querySelectorAll('.st button').forEach(x=>x.classList.toggle('on',x===b));
     const rd=f.querySelector('.rd'),di=f.querySelector('[name=date]');rd.hidden=st.status!=='read';if(st.status==='read'&&!di.value)di.value=today();
     const dr=f.querySelector('[name=dateRec]');if(!eid&&st.status==='want'&&!dr.value)dr.value=today()});
+  f.querySelectorAll('.gpk button').forEach(x=>x.onclick=()=>{const g=x.textContent;x.classList.toggle('on');st.groups=x.classList.contains('on')?[...st.groups,g]:st.groups.filter(y=>y!==g)});
   const gi=f.querySelector('[name=genre]'),ci=f.querySelector('[name=cat]');
   if(ci){const fv=n=>f.querySelector(`[name=${n}]`);
     bookAC(fv('title'),b=>fillPicked(f,b))}
   // Date read + rating stay stored on a book switched to Want (hidden, not erased), so switching back loses nothing.
-  const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(!grp){o.cat=normCat(o.cat);o.status=st.status;o.rating=st.rating}return o};
+  const collect=()=>{const o={...it,...Object.fromEntries(new FormData(f))};if(!grp){o.cat=normCat(o.cat);o.status=st.status;o.rating=st.rating;
+    o.groups=[...new Set([...st.groups,...String(o.gnew||'').split(',').map(x=>x.trim()).filter(Boolean)])];delete o.gnew;delete o.group}return o};
   f.querySelector('.cx').onclick=close;
   const del=f.querySelector('.del');if(del)del.onclick=()=>{if(confirm('Delete this?')){if(grp)db.groups=db.groups.filter(x=>x.id!==eid);else db.books=db.books.filter(x=>x.id!==eid);save();close();render()}};
   const shr=f.querySelector('.shr');if(shr)shr.onclick=()=>shareGroup(it);
@@ -434,7 +443,7 @@ $('#grf').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!
   const seen={read:new Set(db.books.filter(b=>b.status==='read').map(key)),want:new Set(db.books.filter(b=>b.status==='want').map(key))},add={read:[],want:[]};let dup=0;
   rows.forEach((r,i)=>{const title=g(r,'Title');if(!title)return;
     const L=g(r,'Exclusive Shelf')==='read'?'read':'want',d=g(r,'Date Read').replace(/\//g,'-'),pg=parseInt(g(r,'Number of Pages')),rt=parseInt(g(r,'My Rating'))||0,da=Date.parse(g(r,'Date Added').replace(/\//g,'-'));
-    const b={status:L,title,author:g(r,'Author').replace(/\s+/g,' '),pages:pg>0&&pg<=10000?pg:'',year:(g(r,'Original Publication Year')||g(r,'Year Published')).replace(/\D/g,'').slice(0,4),publisher:g(r,'Publisher'),by:'',...guessGenre(g(r,'Bookshelves').split(/,\s*/)),group:'',reviewText:grText(g(r,'My Review')),review:'',notes:'',id:id()+i.toString(36),added:isNaN(da)?Date.now()-i:da};
+    const b={status:L,title,author:g(r,'Author').replace(/\s+/g,' '),pages:pg>0&&pg<=10000?pg:'',year:(g(r,'Original Publication Year')||g(r,'Year Published')).replace(/\D/g,'').slice(0,4),publisher:g(r,'Publisher'),by:'',...guessGenre(g(r,'Bookshelves').split(/,\s*/)),groups:[],reviewText:grText(g(r,'My Review')),review:'',notes:'',id:id()+i.toString(36),added:isNaN(da)?Date.now()-i:da};
     if(L==='read'){b.date=/^\d{4}-\d{2}-\d{2}$/.test(d)?d:'';b.rating=rt>=1&&rt<=5?rt:0}
     if(seen[L].has(key(b)))return dup++;seen[L].add(key(b));add[L].push(b)});
   const n=add.read.length,m=add.want.length;
@@ -446,18 +455,22 @@ $('#grf').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!
 const gByName=n=>db.groups.find(g=>g.name&&g.name===n);
 const toShared=b=>({title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',year:b.year||'',publisher:b.publisher||'',cover:b.cover||'',by:'Carol',rec:b.by||'',dateRec:b.dateRec||'',about:(b.about||'').slice(0,2000),review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:(b.reviewText||'').slice(0,1000),notes:(b.notes||'').slice(0,2000)});
 // Push one of Carol's books to its shared group (create or update). Never throws.
+// A book in several shared groups is pushed to each; its id in each group's list lives in b.shared[token]
+// (b.sid/b.stok = the group it was copied from, or the older one-group share).
 async function pushBook(b,quiet){
-  const g=b&&b.group&&gByName(b.group);if(!g||!g.token)return true;
-  if(b.sid&&b.stok===g.token&&!b.sown)return true;          // came from the group; not hers to push
-  try{
-    if(b.sid&&b.stok===g.token)await api('PUT',`/groups/${g.token}/books/${b.sid}`,toShared(b)).catch(e=>{if(e.status!==404)throw e});
-    else{const r=await api('POST',`/groups/${g.token}/books`,toShared(b));Object.assign(b,{sid:r.id,stok:g.token,sown:true})}
-    delete b.dirty;save();return true;
-  }catch(e){b.dirty=1;save();if(!quiet)msg(`Saved here — couldn’t share to “${g.name}” yet (offline?). Will retry.`);return false}
+  if(!b)return true;let ok=true;
+  for(const name of gsOf(b)){const g=gByName(name);if(!g||!g.token)continue;
+    if(b.sid&&b.stok===g.token&&!b.sown)continue;          // came from that group; not hers to push
+    const sid=b.stok===g.token&&b.sid||(b.shared||{})[g.token];
+    try{
+      if(sid)await api('PUT',`/groups/${g.token}/books/${sid}`,toShared(b)).catch(e=>{if(e.status!==404)throw e});
+      else{const r=await api('POST',`/groups/${g.token}/books`,toShared(b));b.shared={...(b.shared||{}),[g.token]:r.id}}
+    }catch(e){ok=false;if(!quiet)msg(`Saved here — couldn’t share to “${g.name}” yet (offline?). Will retry.`)}}
+  if(ok)delete b.dirty;else b.dirty=1;save();return ok;
 }
 async function syncPending(){for(const b of [...db.books])if(b.dirty&&!(await pushBook(b,true)))return false;return true}
 function renameGroup(g,name){
-  db.books.forEach(b=>{if(b.group===g.name)b.group=name});
+  db.books.forEach(b=>{if(gsOf(b).includes(g.name))b.groups=gsOf(b).map(x=>x===g.name?name:x)});
   db.views.forEach(v=>{if(v.f&&v.f.group===g.name)v.f.group=name});
   if(view.group===g.name){view.group=name;saveView()}
   if(g.token)api('PATCH',`/groups/${g.token}`,{name}).catch(()=>msg('Renamed here — couldn’t update the shared list name.'));
@@ -476,7 +489,7 @@ async function shareGroup(g){
   if(!g.token){
     try{const r=await api('POST','/groups',{name:g.name});g.token=r.token;save();render()}
     catch(e){return msg('Couldn’t make a share link — check your connection and try again.')}
-    const mine=db.books.filter(b=>b.group===g.name&&!b.sid);
+    const mine=db.books.filter(b=>gsOf(b).includes(g.name)&&b.stok!==g.token&&!(b.shared||{})[g.token]);
     if(mine.length&&confirm(`Also add the ${mine.length} book${mine.length===1?'':'s'} already tagged “${g.name}” to the shared list?`)){
       mine.forEach(b=>b.dirty=1);save();if(!(await syncPending()))msg('Some books couldn’t be shared yet — will retry.')}
     return linkBox('Share link ready',`Anyone with this link can see and add books to “${g.name}”. They won’t see your own lists.`,SHARE_BASE+g.token,g.name);
@@ -502,7 +515,7 @@ function groupView(g){
       <div class="gact">${have(b)?'<button type="button" class="sbtn" disabled>✓ In your books</button>':`<button type="button" class="sbtn pri" data-sid="${esc(b.id)}">Add to Want to read</button>`}</div></div>`).join('')
       :`<div class="empty">No shared books yet.<br>Books you save with this group, and ones friends add from the link, show up here.</div>`;
     gl.querySelectorAll('[data-sid]').forEach(btn=>btn.onclick=()=>{const b=books.find(x=>x.id===btn.dataset.sid);
-      db.books.push({status:'want',title:b.title,author:b.author,cover:b.cover,cat:b.cat,genre:b.genre,pages:b.pages,year:b.year||'',publisher:b.publisher||'',by:b.rec||b.by,dateRec:b.dateRec||'',about:b.about||'',group:g.name,review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
+      db.books.push({status:'want',title:b.title,author:b.author,cover:b.cover,cat:b.cat,genre:b.genre,pages:b.pages,year:b.year||'',publisher:b.publisher||'',by:b.rec||b.by,dateRec:b.dateRec||'',about:b.about||'',groups:[g.name],review:b.review,reviewText:b.reviewText,notes:b.notes,id:id(),added:Date.now(),sid:b.id,stok:g.token,sown:false});
       save();btn.disabled=true;btn.classList.remove('pri');btn.textContent='✓ Added to Want to read'})};
   api('GET',`/groups/${g.token}`).then(d=>draw(d.books)).catch(e=>{st.textContent=e.status===404?'This shared list no longer exists.':'Couldn’t load the shared list — check your connection.'});
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;
