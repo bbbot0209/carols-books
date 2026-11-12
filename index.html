@@ -162,7 +162,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261108k"></script>
+<script src="common.js?v=20261112a"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -438,7 +438,7 @@ $('#grf').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!
 // ---------- shared book groups ----------
 const gByName=n=>db.groups.find(g=>g.name&&g.name===n);
 // status = the book's status FOR THAT GROUP (b.gst), so the group page can show Read / Want to read (v20261108k).
-const toShared=(b,g)=>({status:gstOf(b,g)||'',title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',year:b.year||'',publisher:b.publisher||'',cover:b.cover||'',by:'Carol',rec:b.by||'',dateRec:b.dateRec||'',about:(b.about||'').slice(0,2000),review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:(b.reviewText||'').slice(0,1000),notes:(b.notes||'').slice(0,2000)});
+const toShared=(b,g)=>({status:gstOf(b,g)||'',title:b.title,author:b.author,cat:b.cat||'',genre:b.genre,pages:b.pages||'',year:b.year||'',publisher:b.publisher||'',cover:b.cover||'',by:(b.addedBy&&b.addedBy[g])||'Carol',rec:b.by||'',dateRec:b.dateRec||'',about:(b.about||'').slice(0,2000),review:/^https?:\/\//i.test(b.review||'')?b.review:'',reviewText:(b.reviewText||'').slice(0,1000),notes:(b.notes||'').slice(0,2000)});
 // Push one of Carol's books to its shared group (create or update). Never throws.
 // A book in several shared groups is pushed to each; its id in each group's list lives in b.shared[token]
 // (b.sid/b.stok = the group it was copied from, or the older one-group share).
@@ -469,7 +469,8 @@ async function syncGroupStatus(){
 async function syncPending(){for(const b of [...db.books])if(b.dirty&&!(await pushBook(b,true)))return false;return true}
 function renameGroup(g,name){
   db.books.forEach(b=>{if(gsOf(b).includes(g.name)){b.groups=gsOf(b).map(x=>x===g.name?name:x);
-    if(b.gst&&g.name in b.gst){b.gst[name]=b.gst[g.name];delete b.gst[g.name]}normGst(b)}});
+    if(b.gst&&g.name in b.gst){b.gst[name]=b.gst[g.name];delete b.gst[g.name]}
+    if(b.addedBy&&g.name in b.addedBy){b.addedBy[name]=b.addedBy[g.name];delete b.addedBy[g.name]}normGst(b)}});
   db.views.forEach(v=>{if(v.f&&v.f.group===g.name)v.f.group=name});
   if(view.group===g.name){view.group=name;saveView()}
   if(g.token)api('PATCH',`/groups/${g.token}`,{name}).catch(()=>msg('Renamed here — couldn’t update the shared list name.'));
