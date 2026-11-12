@@ -120,6 +120,7 @@
   .bt tr:active td{background:#f3ece0}
   .gpk{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.gpk button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:14px;color:var(--ink)}.gpk button.on{background:var(--acc2);border-color:var(--acc2);color:#fff}.gpk button.on::before{content:'✓ '}
   .srt{flex-basis:100%;display:flex;align-items:center;gap:8px;margin-top:4px;font-size:14px;color:var(--mute)}.srt select{height:32px;padding:0 6px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:16px;color:var(--ink);font-family:inherit}
+  .shw{flex-basis:100%;display:flex;align-items:center;gap:2px;margin-top:4px;font-size:14px;color:var(--mute)}.shw span{margin-right:6px}.crow .shw button{text-decoration:none;color:var(--ink);opacity:.55;padding:4px 5px}.crow .shw button.on{opacity:1;font-weight:600;color:var(--acc2);text-decoration:underline}
   .crow .dsp{display:flex;gap:2px}.crow .dsp button{text-decoration:none;color:var(--ink);opacity:.55;padding:4px 5px}.crow .dsp button.on{opacity:1;font-weight:600;color:var(--acc2);text-decoration:underline}
   .sh2{font:600 16px Georgia,serif;margin:14px 2px 6px}.sh2 span{font:400 13px system-ui,sans-serif;opacity:.65;margin-left:6px}
   .sl{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
@@ -163,7 +164,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261112b"></script>
+<script src="common.js?v=20261112c"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -293,10 +294,10 @@ function render(keepOpen,refocus){
       :`<div class="empty">No book groups yet.<br>Tap + to add one.</div>`;
   }else{
     const items=shown(),n=db.books.length;
-    L.innerHTML=filterPanel()+crowHtml(`${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}`,disp,items.length)+
+    L.innerHTML=filterPanel()+crowHtml(`${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}`,disp,items.length,COLS,view.status)+
       (items.length?listHtml(items,disp):`<div class="empty">${view.q?`“${esc(view.q)}” isn’t in your books yet.<div class="olr ac"><div class="hint">Searching online…</div></div><button type="button" class="addq">Add “${esc(view.q)}” yourself</button>`:n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
     wireFilters(L);
-    wireDisp(L,disp,saveDisp,()=>render(),printView);
+    wireDisp(L,disp,saveDisp,()=>render(),printView,st=>{view.status=st;viewName='';saveView();render()});
     L.querySelectorAll('.sr1').forEach(el=>el.onclick=()=>edit(el.dataset.id));
     L.querySelectorAll('.bt tr[data-id]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;edit(tr.dataset.id)});
     L.querySelector('.addq')?.addEventListener('click',()=>edit(null,{title:view.q.trim()}));

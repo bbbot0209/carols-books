@@ -171,6 +171,8 @@ function cell(b,k,pr){const v=k==='group'?gsOf(b).join(', '):b[k];
   return esc(v)}
 const tableHtml=(items,pr,cols=COLS,d={})=>`<div class="tw"><table class="bt"><thead><tr>${cols.map(([k,l])=>`<th data-k="${k}"${!pr&&d.k===k?' class="on"':''}>${l}${!pr&&d.k===k?(d.dir>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead>
   <tbody>${items.map(b=>`<tr data-id="${esc(b.id)}">${cols.map(([k])=>`<td${k==='notes'?' class="nt"':''}>${cell(b,k,pr)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+// "added by": a name on group pages; on Carol's page a per-group map {BAIP:'Bob'} → one pill per distinct name.
+const addedByHtml=a=>[...new Set(typeof a==='string'?[a]:Object.values(a||{}))].filter(Boolean).map(n=>`<span class="pill">added by ${esc(n)}</span>`).join('');
 // One book card. Book shape = Carol's library (by = recommended by); group.html maps shared books to it (addedBy, _mine).
 const cardHtml=(b,pr)=>`
       <div class="card${coverImg(b)?' hc':''}" data-id="${esc(b.id)}">${coverImg(b)}${b._mine?'<span class="mine">Edit</span>':''}
@@ -182,7 +184,7 @@ const cardHtml=(b,pr)=>`
           ${b.pages?`<span class="pill">${esc(b.pages)} pages</span>`:''}${b.year?`<span class="pill">${esc(b.year)}</span>`:''}
           ${b.status==='read'&&b.date?`<span class="pill">${fmtDate(b.date)}</span>`:''}
           ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
-          ${recPill({rec:b.by,dateRec:b.dateRec})}${b.addedBy?`<span class="pill">added by ${esc(b.addedBy)}</span>`:''}
+          ${recPill({rec:b.by,dateRec:b.dateRec})}${addedByHtml(b.addedBy)}
         </div>
         ${aboutHtml(b)}${reviewHtml(b)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
@@ -194,9 +196,13 @@ const SORTS=[['title','Title'],['author','Author'],['cat','Category'],['year','P
 const sortHtml=(d,cols)=>{const o=[['','Default'],...SORTS];const c=cols.find(c=>c[0]===d.k);if(c&&!o.some(x=>x[0]===d.k))o.push([c[0],c[1]]);
   const k=c?d.k:'',num=c&&c[2];
   return `<div class="srt"><label>Sort by <select>${o.map(([v,l])=>`<option value="${v}"${v===k?' selected':''}>${l}</option>`).join('')}</select></label>${k?`<button type="button" class="sdir">${k==='year'?(d.dir>0?'Oldest first':'Newest first'):num?(d.dir>0?'Low → high':'High → low'):(d.dir>0?'A → Z':'Z → A')}</button>`:''}</div>`};
-const crowHtml=(countHtml,d,any,cols=COLS)=>`<div class="crow"><div class="count">${countHtml}</div><span class="dsp">${DISPS.map(([m,l])=>`<button type="button" data-m="${m}"${d.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${any?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>'+sortHtml(d,cols):''}</div>`;
+// Show: All / Read / Want to read (Carol 11/12) — on every display and print; st = current status ('' = all).
+const SHOWS=[['','All'],['read','Read'],['want','Want to read']];
+const showHtml=st=>`<div class="shw"><span>Show</span>${SHOWS.map(([v,l])=>`<button type="button" data-s="${v}"${(st||'')===v?' class="on"':''}>${l}</button>`).join('')}</div>`;
+const crowHtml=(countHtml,d,any,cols=COLS,st)=>`<div class="crow"><div class="count">${countHtml}</div><span class="dsp">${DISPS.map(([m,l])=>`<button type="button" data-m="${m}"${d.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${any?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}${st!==undefined?showHtml(st):''}${any?sortHtml(d,cols):''}</div>`;
 // Wire the display switch, table header sorting (keeps the sideways scroll) and the two print buttons.
-function wireDisp(L,d,saveD,rerender,print){
+function wireDisp(L,d,saveD,rerender,print,setSt){
+  if(setSt)L.querySelectorAll('.shw button').forEach(x=>x.onclick=()=>setSt(x.dataset.s));
   L.querySelectorAll('.dsp button').forEach(x=>x.onclick=()=>{d.mode=x.dataset.m;saveD();rerender()});
   const ss=L.querySelector('.srt select');if(ss)ss.onchange=()=>{d.k=ss.value;d.dir=1;saveD();rerender()};
   L.querySelector('.sdir')?.addEventListener('click',()=>{d.dir=-d.dir;saveD();rerender()});
@@ -216,7 +222,7 @@ function printBooks(items,head,titles,mode,cols=COLS){
   setTimeout(()=>window.print(),50);
 }
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261112b';
+const APPV='20261112c';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});
