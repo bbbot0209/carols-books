@@ -84,6 +84,7 @@
   .bt td.nt{white-space:normal;min-width:180px;max-width:260px}
   .bt td a{color:var(--acc2)}.bt .stars{font-size:13px}
   .bt tr:active td{background:#f3ece0}
+  .srt{flex-basis:100%;display:flex;align-items:center;gap:8px;margin-top:4px;font-size:14px;color:var(--mute)}.srt select{height:32px;padding:0 6px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:16px;color:var(--ink);font-family:inherit}
   .crow .dsp{display:flex;gap:2px}.crow .dsp button{text-decoration:none;color:var(--ink);opacity:.55;padding:4px 5px}.crow .dsp button.on{opacity:1;font-weight:600;color:var(--acc2);text-decoration:underline}
   .sh2{font:600 16px Georgia,serif;margin:14px 2px 6px}.sh2 span{font:400 13px system-ui,sans-serif;opacity:.65;margin-left:6px}
   .sl{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
@@ -119,7 +120,7 @@
 <div id="pv"></div>
 <button class="fab" id="add" aria-label="Add a book" hidden>+</button>
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
-<script src="common.js?v=20261112a"></script>
+<script src="common.js?v=20261112b"></script>
 <script>
 const LKEY='carol-books-group';
 const me=JSON.parse(localStorage.getItem(LKEY)||'null')||{name:'',mine:{}};
@@ -146,12 +147,12 @@ async function load(){
 function shown(){
   const q=$('#q').value.toLowerCase();
   const it=books.filter(b=>!q||[b.title,b.author,b.by,b.rec,b.genre,b.notes,b.reviewText,b.about].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.added-a.added).map(view_);
-  return disp.mode!=='cards'?sortBy(it,disp,GCOLS):it;
+  return sortBy(it,disp,GCOLS);
 }
 function render(){
   if(!books)return;
   const items=shown(),n=books.length,L=$('#list');
-  L.innerHTML=crowHtml(`${items.length}${items.length!==n?' of '+n:''} book${n===1?'':'s'}`,disp,items.length)+
+  L.innerHTML=crowHtml(`${items.length}${items.length!==n?' of '+n:''} book${n===1?'':'s'}`,disp,items.length,GCOLS)+
     (items.length?listHtml(items,disp,GCOLS):`<div class="empty">${n?'Nothing matches.':ro?'No books yet.':'No books yet.<br>Tap + to share one with the group.'}</div>`);
   wireDisp(L,disp,saveDisp,render,printView);
   if(!ro)L.querySelectorAll('.card,.sr1,.bt tr[data-id]').forEach(el=>el.onclick=e=>{if(!e.target.closest('a')&&mine().includes(el.dataset.id))edit(el.dataset.id)});

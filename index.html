@@ -119,6 +119,7 @@
   .bt td a{color:var(--acc2)}.bt .stars{font-size:13px}
   .bt tr:active td{background:#f3ece0}
   .gpk{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.gpk button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:14px;color:var(--ink)}.gpk button.on{background:var(--acc2);border-color:var(--acc2);color:#fff}.gpk button.on::before{content:'✓ '}
+  .srt{flex-basis:100%;display:flex;align-items:center;gap:8px;margin-top:4px;font-size:14px;color:var(--mute)}.srt select{height:32px;padding:0 6px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:16px;color:var(--ink);font-family:inherit}
   .crow .dsp{display:flex;gap:2px}.crow .dsp button{text-decoration:none;color:var(--ink);opacity:.55;padding:4px 5px}.crow .dsp button.on{opacity:1;font-weight:600;color:var(--acc2);text-decoration:underline}
   .sh2{font:600 16px Georgia,serif;margin:14px 2px 6px}.sh2 span{font:400 13px system-ui,sans-serif;opacity:.65;margin-left:6px}
   .sl{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
@@ -162,7 +163,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261112a"></script>
+<script src="common.js?v=20261112b"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -239,7 +240,7 @@ function sortBooks(items){
 // Cards or Table display (Carol 11/8: "each field is a column"). Table columns = the book fields, tap a header to sort.
 let disp={mode:'cards',k:'',dir:1,...(JSON.parse(localStorage.getItem('carol-books-disp')||'null')||{})};
 const saveDisp=()=>localStorage.setItem('carol-books-disp',JSON.stringify(disp));
-const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return disp.mode!=='cards'?sortBy(it,disp):it};
+const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return sortBy(it,disp)};
 // Status hooks for the shared renderers (common.js): per-group status, following the Group / Status filters.
 BV.stOf=b=>stOf(b);
 BV.stCell=b=>{const gs=gsOf(b);return view.group&&gs.includes(view.group)?STL[gstOf(b,view.group)]:gs.length?gs.map(g=>`${esc(g)} · ${STL[gstOf(b,g)]}`).join(', '):STL[b.status]||''};

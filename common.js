@@ -143,10 +143,20 @@ const stPill=(s,g)=>`<span class="pill ${s==='want'?'sw':'sr'}">${g?esc(g)+' · 
 // Page hooks for status. index.html overrides them (per-group status + filters); these defaults suit group.html,
 // where each book has one status for that group, or none (books added by members) → no pill, "Other books" in Summary.
 const BV={stOf:b=>okSt(b.status)?b.status:'',stPills:b=>okSt(b.status)?stPill(b.status):'',stCell:b=>STL[b.status]||''};
+// Author sort key = last name of the first author (Carol 11/12), then the full name: "Erik Larson" → "larson erik larson".
+// Handles "Last, First", co-authors (and / & / ; / comma lists) and suffixes (Jr., III).
+const SUFX=/^(jr|sr|ii|iii|iv|phd|md)\.?$/i;
+function lastKey(a){a=String(a||'').trim();if(!a)return null;
+  let n=a.split(/\s+(?:and|&)\s+|\s*;\s*/i)[0];const ps=n.split(/\s*,\s*/).filter(p=>p&&!SUFX.test(p));
+  const w0=(ps[0]||'').split(/\s+/).filter(w=>!SUFX.test(w));
+  const last=ps.length>1&&w0.length===1?w0[0]:w0[w0.length-1]||n;   // "Larson, Erik" vs "Erik Larson, Jane Doe"
+  return (last+' '+a).toLowerCase()}
+// Sort for every display (Carol 11/12 "Sort by"); d.k = column key, d.dir = 1 A→Z / oldest first, -1 reversed. Ties → title.
 function sortBy(items,d,cols=COLS){const c=cols.find(c=>c[0]===d.k);if(!c)return items;const[k,,num]=c;
-  const val=b=>{const v=k==='group'?gsOf(b).join(', '):k==='status'?BV.stOf(b):b[k];return num?(parseFloat(v)||null):String(v??'').trim().toLowerCase()||null};
-  return items.sort((a,b)=>{const x=val(a),y=val(b);if(x===null||y===null)return x===y?0:x===null?1:-1;   // blanks always last
-    return (num?x-y:x.localeCompare(y))*d.dir})}
+  const val=b=>{const v=k==='group'?gsOf(b).join(', '):k==='status'?BV.stOf(b):b[k];if(k==='author')return lastKey(v);return num?(parseFloat(v)||null):String(v??'').trim().toLowerCase()||null};
+  const ti=b=>String(b.title||'').trim().toLowerCase();
+  return items.sort((a,b)=>{const x=val(a),y=val(b);if(x===null||y===null)return x===y?ti(a).localeCompare(ti(b)):x===null?1:-1;   // blanks always last
+    return (num?x-y:x.localeCompare(y))*d.dir||ti(a).localeCompare(ti(b))})}
 // Summary (Carol 11/8): just Title, Author, Category, Pages — split into Want to read / Read, each with its page total.
 const summaryHtml=(items,pr)=>['want','read',''].map(st=>{const it=items.filter(b=>BV.stOf(b)===st);if(!it.length)return'';
   const pgs=it.reduce((t,b)=>t+(parseInt(b.pages)||0),0);
@@ -179,10 +189,17 @@ const cardHtml=(b,pr)=>`
       </div>`;
 // The list body for a display mode, and the count row above it: "N books   Book Details · Table · Summary   Print · Print titles".
 const listHtml=(items,d,cols=COLS)=>d.mode==='table'?tableHtml(items,false,cols,d):d.mode==='summary'?summaryHtml(items):items.map(b=>cardHtml(b)).join('');
-const crowHtml=(countHtml,d,any)=>`<div class="crow"><div class="count">${countHtml}</div><span class="dsp">${DISPS.map(([m,l])=>`<button type="button" data-m="${m}"${d.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${any?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}</div>`;
+// Sort by menu (Carol 11/12): Title, Author (last name), Category, Published; a table-header sort on another column shows here too.
+const SORTS=[['title','Title'],['author','Author'],['cat','Category'],['year','Published']];
+const sortHtml=(d,cols)=>{const o=[['','Default'],...SORTS];const c=cols.find(c=>c[0]===d.k);if(c&&!o.some(x=>x[0]===d.k))o.push([c[0],c[1]]);
+  const k=c?d.k:'',num=c&&c[2];
+  return `<div class="srt"><label>Sort by <select>${o.map(([v,l])=>`<option value="${v}"${v===k?' selected':''}>${l}</option>`).join('')}</select></label>${k?`<button type="button" class="sdir">${k==='year'?(d.dir>0?'Oldest first':'Newest first'):num?(d.dir>0?'Low → high':'High → low'):(d.dir>0?'A → Z':'Z → A')}</button>`:''}</div>`};
+const crowHtml=(countHtml,d,any,cols=COLS)=>`<div class="crow"><div class="count">${countHtml}</div><span class="dsp">${DISPS.map(([m,l])=>`<button type="button" data-m="${m}"${d.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${any?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>'+sortHtml(d,cols):''}</div>`;
 // Wire the display switch, table header sorting (keeps the sideways scroll) and the two print buttons.
 function wireDisp(L,d,saveD,rerender,print){
   L.querySelectorAll('.dsp button').forEach(x=>x.onclick=()=>{d.mode=x.dataset.m;saveD();rerender()});
+  const ss=L.querySelector('.srt select');if(ss)ss.onchange=()=>{d.k=ss.value;d.dir=1;saveD();rerender()};
+  L.querySelector('.sdir')?.addEventListener('click',()=>{d.dir=-d.dir;saveD();rerender()});
   L.querySelectorAll('.bt th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;d.dir=d.k===k?-d.dir:1;d.k=k;saveD();
     const tw=th.closest('.tw'),j=[...L.querySelectorAll('.tw')].indexOf(tw),sx=tw.scrollLeft;
     rerender();const t2=L.querySelectorAll('.tw')[j];if(t2)t2.scrollLeft=sx});
@@ -199,7 +216,7 @@ function printBooks(items,head,titles,mode,cols=COLS){
   setTimeout(()=>window.print(),50);
 }
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261112a';
+const APPV='20261112b';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});
