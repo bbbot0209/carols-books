@@ -192,9 +192,9 @@ const cardHtml=(b,pr)=>`
 // The list body for a display mode, and the count row above it: "N books   Book Details · Table · Summary   Print · Print titles".
 const listHtml=(items,d,cols=COLS)=>d.mode==='table'?tableHtml(items,false,cols,d):d.mode==='summary'?summaryHtml(items):items.map(b=>cardHtml(b)).join('');
 // Sort by menu (Carol 11/12): Title, Author (last name), Category, Published, Recommended by (11/13); a table-header sort on
-// another column shows here too. 'Most recent' = unsorted order: hers = want to read newest-added first, then read most-recently-read first; group = newest added.
+// another column shows here too. 'Recently added' = unsorted order, newest added first (both pages).
 const SORTS=[['title','Title'],['author','Author'],['cat','Category'],['year','Published'],['by','Recommended by']];
-const sortHtml=(d,cols)=>{const o=[['','Most recent'],...SORTS];const c=cols.find(c=>c[0]===d.k);if(c&&!o.some(x=>x[0]===d.k))o.push([c[0],c[1]]);
+const sortHtml=(d,cols)=>{const o=[['','Recently added'],...SORTS];const c=cols.find(c=>c[0]===d.k);if(c&&!o.some(x=>x[0]===d.k))o.push([c[0],c[1]]);
   const k=c?d.k:'',num=c&&c[2];
   return `<div class="srt"><label>Sort by <select>${o.map(([v,l])=>`<option value="${v}"${v===k?' selected':''}>${l}</option>`).join('')}</select></label>${k?`<button type="button" class="sdir">${k==='year'?(d.dir>0?'Oldest first':'Newest first'):num?(d.dir>0?'Low → high':'High → low'):(d.dir>0?'A → Z':'Z → A')}</button>`:''}</div>`};
 // Show: All / Read / Want to read (Carol 11/12) — on every display and print; st = current status ('' = all).
@@ -223,7 +223,7 @@ function printBooks(items,head,titles,mode,cols=COLS){
   setTimeout(()=>window.print(),50);
 }
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261113b';
+const APPV='20261113c';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});

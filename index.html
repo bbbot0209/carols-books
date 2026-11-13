@@ -164,7 +164,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261113b"></script>
+<script src="common.js?v=20261113c"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -238,10 +238,8 @@ function describe(v=view){
   return p.join(' · ');
 }
 const extra=v=>[v.group,v.pubQ&&v.pubY,v.recQ&&v.recD,v.readQ&&v.readD,v.cat].filter(Boolean).length;
-function sortBooks(items){
-  const rd=(a,b)=>(b.date||'').localeCompare(a.date||'')||(b.added||0)-(a.added||0),ad=(a,b)=>(b.added||0)-(a.added||0);
-  return items.sort((a,b)=>{const x=stOf(a),y=stOf(b);return x!==y?(x==='want'?-1:1):x==='read'?rd(a,b):ad(a,b)});
-}
+// Default order = "Recently added" (Carol 11/13): newest added first, read and want to read mixed.
+const sortBooks=items=>items.sort((a,b)=>(b.added||0)-(a.added||0));
 // Cards or Table display (Carol 11/8: "each field is a column"). Table columns = the book fields, tap a header to sort.
 let disp={mode:'cards',k:'',dir:1,...(JSON.parse(localStorage.getItem('carol-books-disp')||'null')||{})};
 const saveDisp=()=>localStorage.setItem('carol-books-disp',JSON.stringify(disp));
