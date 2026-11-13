@@ -222,7 +222,7 @@ function printBooks(items,head,titles,mode,cols=COLS){
   setTimeout(()=>window.print(),50);
 }
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261112c';
+const APPV='20261113a';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});

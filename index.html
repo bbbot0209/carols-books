@@ -164,7 +164,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261112c"></script>
+<script src="common.js?v=20261113a"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -210,6 +210,7 @@ const fold=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/
 const hasSt=(b,s)=>b.status===s||gsOf(b).some(g=>gstOf(b,g)===s);
 // The status a book is shown/sorted under in the current view.
 const stOf=(b,v=view)=>v.group&&gsOf(b).includes(v.group)?gstOf(b,v.group):v.status&&hasSt(b,v.status)?v.status:b.status;
+const STOP=new Set(['the','a','an','of','and']);
 function matches(b,v=view){
   if(v.status&&(v.group?!gsOf(b).includes(v.group)||gstOf(b,v.group)!==v.status:!hasSt(b,v.status)))return false;
   if(v.group&&!gsOf(b).includes(v.group))return false;
@@ -219,7 +220,8 @@ function matches(b,v=view){
   if(v.readQ&&v.readD){if(!b.date||!cmp(b.date,v.readQ,v.readD))return false}
   // Search = every typed word starts a word in her own fields (title, author, recommended by, group, genre, notes).
   // Not the auto-filled blurb, and not mid-word: "Land" must not match "island" in a description (Carol 11/8).
-  const qs=fold(v.q||'').split(/\s+/).filter(Boolean);if(!qs.length)return true;
+  // Little words ("The City of Thieves") are ignored unless they're all she typed — titles are stored without them.
+  const qa=fold(v.q||'').split(/\s+/).filter(Boolean),qn=qa.filter(q=>!STOP.has(q.replace(/[^a-z0-9]/g,''))),qs=qn.length?qn:qa;if(!qs.length)return true;
   const ws=fold([b.title,b.author,b.by,...gsOf(b),b.genre,b.notes].join(' ')).split(/[^a-z0-9]+/).filter(Boolean);
   return qs.every(q=>ws.some(w=>w.startsWith(q.replace(/[^a-z0-9]/g,''))));
 }
@@ -396,6 +398,9 @@ function edit(eid,pre){
     let rec=it;
     if(grp){if(eid&&it.name!==o.name)renameGroup(it,o.name)}
     if(eid)Object.assign(it,o);else list.push(rec={...o,id:id(),added:Date.now()});
+    // A new book hidden by the current search/filters (searched "The City of Thieves", saved "City of Thieves")
+    // looked like the save failed — clear the search, then the filters, so she sees it land.
+    if(!grp&&!eid&&!matches(rec)){view.q='';viewName='';if(!matches(rec))view={...BLANK};saveView();syncControls()}
     save();close();render();if(!grp)pushBook(rec)};
   document.documentElement.classList.add('modal');$('#dlg').showModal();$('#dlg').scrollTop=0;f.querySelector('.cx').focus({preventScroll:true});
   // Opened from a search with no match: run the online title lookup straight away.
