@@ -164,7 +164,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261113a"></script>
+<script src="common.js?v=20261113b"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -204,7 +204,9 @@ const allGroupNames=()=>[...new Set([...groupNames(),...db.books.flatMap(gsOf)])
 const BLANK={status:'',group:'',pubQ:'',pubY:'',recQ:'',recD:'',readQ:'',readD:'',cat:'',q:''};
 let view={...BLANK,...(JSON.parse(localStorage.getItem(VKEY)||'null')||{})},viewName='';
 const saveView=()=>localStorage.setItem(VKEY,JSON.stringify(view));
-const cmp=(v,q,x)=>q==='before'?v<x:q==='after'?v>x:(v===x||(x.startsWith(v+'-')));   // 'in'/'on'; old YYYY-MM dates match any day of that month
+// 'on'; old YYYY-MM dates match any day of that month. 'on or before'/'on or after' (Carol 11/13) include that day.
+const onD=(v,x)=>v===x||x.startsWith(v+'-');
+const cmp=(v,q,x)=>q==='before'?v<x&&!onD(v,x):q==='after'?v>x:q==='on or before'?v<x||onD(v,x):q==='on or after'?v>x||onD(v,x):onD(v,x);
 const fold=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/['’]/g,'');
 // With a Group filter, Status means THAT group's status; with none, a book matches if it or any of its groups has it.
 const hasSt=(b,s)=>b.status===s||gsOf(b).some(g=>gstOf(b,g)===s);
@@ -258,6 +260,7 @@ $('#grpbtn').onclick=()=>{if(mode==='groups')return showBooks();mode='groups';$(
 
 const sel=(cls,opts,v)=>`<select class="${cls}">${opts.map(([val,l])=>`<option value="${esc(val)}"${val===v?' selected':''}>${esc(l)}</option>`).join('')}</select>`;
 // Carol 11/8: all view fields on one line (scrolls sideways on a phone); every field defaults to "any".
+const DQ=['before','on or before','on','on or after','after'];
 function filterPanel(){
   const gs=allGroupNames();if(view.group&&!gs.includes(view.group))gs.push(view.group);
   const n=extra(view)+(view.status?1:0),Q=a=>[['','any'],...a.map(x=>[x,x])];
@@ -266,8 +269,8 @@ function filterPanel(){
     <label class="fi"><span>Status</span>${sel('fs',[['','any'],['read','Read'],['want','Want to read']],view.status)}</label>
     <label class="fi"><span>Group</span>${sel('fg',[['','any'],...gs.map(g=>[g,g])],view.group)}</label>
     <div class="fi"><span>Published</span><div>${sel('fpq',Q(['before','in','after']),view.pubQ)}<input class="fpy" inputmode="numeric" maxlength="4" placeholder="year" value="${esc(view.pubY)}"></div></div>
-    <div class="fi"><span>Recommended</span><div>${sel('frq',Q(['before','on','after']),view.recQ)}<input class="frd" type="date" value="${esc(view.recD)}"></div></div>
-    <div class="fi"><span>Date read</span><div>${sel('fdq',Q(['before','on','after']),view.readQ)}<input class="fdd" type="date" value="${esc(view.readD)}"></div></div>
+    <div class="fi"><span>Recommended</span><div>${sel('frq',Q(DQ),view.recQ)}<input class="frd" type="date" value="${esc(view.recD)}"></div></div>
+    <div class="fi"><span>Date read</span><div>${sel('fdq',Q(DQ),view.readQ)}<input class="fdd" type="date" value="${esc(view.readD)}"></div></div>
     <label class="fi"><span>Genre</span><select class="fc"><option value="">any</option>${Object.entries(GENRES).map(([c,gs])=>`<optgroup label="${c}"><option value="${c}"${view.cat===c?' selected':''}>All ${c.toLowerCase()}</option>${gs.map(g=>`<option${view.cat===g?' selected':''}>${g}</option>`).join('')}</optgroup>`).join('')}</select></label>
     ${n?'<button type="button" class="fclr">Clear</button>':''}
   </div>`;
