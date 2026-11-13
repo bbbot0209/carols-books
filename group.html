@@ -121,7 +121,7 @@
 <div id="pv"></div>
 <button class="fab" id="add" aria-label="Add a book" hidden>+</button>
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
-<script src="common.js?v=20261113c"></script>
+<script src="common.js?v=20261113d"></script>
 <script>
 const LKEY='carol-books-group';
 const me=JSON.parse(localStorage.getItem(LKEY)||'null')||{name:'',mine:{}};
@@ -147,8 +147,8 @@ async function load(){
 }
 function shown(){
   const q=$('#q').value.toLowerCase();
-  const it=books.filter(b=>!q||[b.title,b.author,b.by,b.rec,b.genre,b.notes,b.reviewText,b.about].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.added-a.added).map(view_).filter(b=>!disp.st||b.status===disp.st);
-  return sortBy(it,disp,GCOLS);
+  const it=books.filter(b=>!q||[b.title,b.author,b.by,b.rec,b.genre,b.notes,b.reviewText,b.about].join(' ').toLowerCase().includes(q)).map(view_).filter(b=>!disp.st||b.status===disp.st);
+  return sortBy(recentRec(it),disp,GCOLS);
 }
 function render(){
   if(!books)return;

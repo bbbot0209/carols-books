@@ -164,7 +164,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261113c"></script>
+<script src="common.js?v=20261113d"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -238,12 +238,11 @@ function describe(v=view){
   return p.join(' · ');
 }
 const extra=v=>[v.group,v.pubQ&&v.pubY,v.recQ&&v.recD,v.readQ&&v.readD,v.cat].filter(Boolean).length;
-// Default order = "Recently added" (Carol 11/13): newest added first, read and want to read mixed.
-const sortBooks=items=>items.sort((a,b)=>(b.added||0)-(a.added||0));
+// Default order = "Recently recommended" (Carol 11/13): newest date recommended first (common.js recentRec).
 // Cards or Table display (Carol 11/8: "each field is a column"). Table columns = the book fields, tap a header to sort.
 let disp={mode:'cards',k:'',dir:1,...(JSON.parse(localStorage.getItem('carol-books-disp')||'null')||{})};
 const saveDisp=()=>localStorage.setItem('carol-books-disp',JSON.stringify(disp));
-const shown=()=>{const it=sortBooks(db.books.filter(b=>matches(b)));return sortBy(it,disp)};
+const shown=()=>{const it=recentRec(db.books.filter(b=>matches(b)));return sortBy(it,disp)};
 // Status hooks for the shared renderers (common.js): per-group status, following the Group / Status filters.
 BV.stOf=b=>stOf(b);
 BV.stCell=b=>{const gs=gsOf(b);return view.group&&gs.includes(view.group)?STL[gstOf(b,view.group)]:gs.length?gs.map(g=>`${esc(g)} · ${STL[gstOf(b,g)]}`).join(', '):STL[b.status]||''};
