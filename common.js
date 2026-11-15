@@ -201,7 +201,41 @@ const sortHtml=(d,cols)=>{const o=[['','Recently recommended'],...SORTS];const c
 // Show: All / Read / Want to read (Carol 11/12) — on every display and print; st = current status ('' = all).
 const SHOWS=[['','All'],['read','Read'],['want','Want to read']];
 const showHtml=st=>`<div class="shw"><span>Show</span>${SHOWS.map(([v,l])=>`<button type="button" data-s="${v}"${(st||'')===v?' class="on"':''}>${l}</button>`).join('')}</div>`;
-const crowHtml=(countHtml,d,any,cols=COLS,st)=>`<div class="crow"><div class="count">${countHtml}</div><span class="dsp">${DISPS.map(([m,l])=>`<button type="button" data-m="${m}"${d.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${any?'<button type="button" class="prc">Print</button><button type="button" class="prt">Print titles</button>':''}${st!==undefined?showHtml(st):''}${any?sortHtml(d,cols):''}</div>`;
+const crowHtml=(countHtml,d,any,cols=COLS,st)=>{const pa=any||SEL.on&&SEL.ids.size;
+  return `<div class="crow"><div class="count">${countHtml}</div><span class="dsp">${DISPS.map(([m,l])=>`<button type="button" data-m="${m}"${d.mode===m?' class="on"':''}>${l}</button>`).join('')}</span>${pa?`<button type="button" class="prc">${prLbl(0)}</button><button type="button" class="prt">${prLbl(1)}</button>`:''}${any&&!SEL.on?'<button type="button" class="psel">Select</button>':''}${selBarHtml()}${st!==undefined?showHtml(st):''}${any?sortHtml(d,cols):''}</div>`};
+// ---------- Select books to print (Carol 11/14: "select a few books and have only those printed") ----------
+// "Select" in the count row turns on select mode: every card / table row / summary line gets a checkbox and a tap
+// picks it instead of opening the form. While ≥1 is picked, Print / Print titles print ONLY those (current sort order),
+// even ones a later filter hides. Kept in memory by book id across filters/sort/display; Done (select off) clears it.
+const SEL={on:false,ids:new Set()};
+const SEL_Q='.card[data-id],.sr1[data-id],.bt tr[data-id]';
+const prLbl=t=>(SEL.on&&SEL.ids.size?'Print selected':'Print')+(t?' titles':'');
+const selTxt=()=>SEL.ids.size?`${SEL.ids.size} selected`:'Tap books to select them';
+const selBarHtml=()=>SEL.on?`<div class="selb"><b>${selTxt()}</b><button type="button" class="sclr"${SEL.ids.size?'':' hidden'}>Clear</button><button type="button" class="sdone">Done</button></div>`:'';
+// Drop ids of books that no longer exist (all = every book on the page, not just the filtered ones).
+const selPrune=all=>{if(!SEL.ids.size)return;const ok=new Set(all.map(b=>b.id));[...SEL.ids].forEach(i=>ok.has(i)||SEL.ids.delete(i))};
+// The picked books out of all, or null when nothing is picked (→ print the current view as before).
+const selOf=all=>{const r=SEL.on&&SEL.ids.size?all.filter(b=>SEL.ids.has(b.id)):[];return r.length?r:null};
+// Refresh the picked look + "N selected" + print labels in place (keeps scroll position in a long list/table).
+function selUpd(L){L.querySelectorAll(SEL_Q).forEach(el=>el.classList.toggle('picked',SEL.ids.has(el.dataset.id)));
+  const b=L.querySelector('.selb b');if(b)b.textContent=selTxt();const c=L.querySelector('.sclr');if(c)c.hidden=!SEL.ids.size;
+  const p=L.querySelector('.prc'),t=L.querySelector('.prt');if(p)p.textContent=prLbl(0);if(t)t.textContent=prLbl(1)}
+// Add checkboxes to the rendered list and catch taps on books (capture phase → the page's own edit handlers never fire).
+function markSel(L){L.classList.toggle('selm',SEL.on);if(!SEL.on)return;
+  L.querySelectorAll(SEL_Q).forEach(el=>(el.tagName==='TR'?el.firstElementChild:el).insertAdjacentHTML('afterbegin','<span class="ck" aria-hidden="true"></span>'));
+  selUpd(L);
+  if(!L._selw){L._selw=1;L.addEventListener('click',e=>{if(!L.classList.contains('selm'))return;const el=e.target.closest(SEL_Q);if(!el||!L.contains(el))return;
+    e.preventDefault();e.stopPropagation();const i=el.dataset.id;if(SEL.ids.has(i))SEL.ids.delete(i);else SEL.ids.add(i);selUpd(L)},true)}}
+document.head.insertAdjacentHTML('beforeend',`<style>
+  .crow .selb{flex-basis:100%;display:flex;align-items:center;gap:14px;margin:6px 0 2px;padding:8px 12px;border-radius:10px;background:#dde9e4;color:var(--acc2)}
+  .crow .selb b{flex:1;font-size:15px;white-space:normal}.crow .selb button{font-size:15px;font-weight:600;padding:4px 2px}
+  .selm .ck{display:inline-block;flex:none;width:22px;height:22px;border:2px solid #b9ad9c;border-radius:6px;background:#fff;vertical-align:middle;text-align:center;font:700 15px/18px system-ui,sans-serif;color:#fff}
+  .selm .picked .ck{background:var(--acc2);border-color:var(--acc2)}.selm .picked .ck::after{content:'✓'}
+  .selm .card{padding-right:46px;cursor:pointer}.selm .card .ck{position:absolute;right:12px;top:12px}.selm .card .mine{display:none}
+  .selm .card.picked{border-color:var(--acc2);box-shadow:inset 0 0 0 1px var(--acc2);background:#f1f7f4}
+  .selm .sr1 .ck{align-self:center;margin-right:8px}.selm .sr1.picked{background:#e6f0ec}
+  .selm .bt td:first-child .ck{margin:0 6px 2px 0}.selm .bt tr.picked td{background:#e6f0ec}
+</style>`);
 // Wire the display switch, table header sorting (keeps the sideways scroll) and the two print buttons.
 function wireDisp(L,d,saveD,rerender,print,setSt){
   if(setSt)L.querySelectorAll('.shw button').forEach(x=>x.onclick=()=>setSt(x.dataset.s));
@@ -213,10 +247,14 @@ function wireDisp(L,d,saveD,rerender,print,setSt){
     rerender();const t2=L.querySelectorAll('.tw')[j];if(t2)t2.scrollLeft=sx});
   L.querySelector('.prc')?.addEventListener('click',()=>print(false));
   L.querySelector('.prt')?.addEventListener('click',()=>print(true));
+  L.querySelector('.psel')?.addEventListener('click',()=>{SEL.on=true;rerender()});
+  L.querySelector('.sclr')?.addEventListener('click',()=>{SEL.ids.clear();selUpd(L)});
+  L.querySelector('.sdone')?.addEventListener('click',()=>{SEL.on=false;SEL.ids.clear();rerender()});
+  markSel(L);
 }
 // Print: "Print" = the current display (cards, landscape table, or summary); "Print titles" = numbered Title — Author list.
 const titlesHtml=items=>`<ol>${items.map(b=>`<li>${esc(b.title)}${b.author?` <i>— ${esc(b.author)}</i>`:''}${[b.year&&'published '+esc(b.year),b.pages&&esc(b.pages)+' pages'].filter(Boolean).map(x=>` · ${x}`).join('')}</li>`).join('')}</ol>`;
-const printHead=(title,sub,n)=>`<h1>${esc(title)}</h1><div class="pd">${sub?esc(sub)+' · ':''}${n} book${n===1?'':'s'} · printed ${fmtDate(today())}</div>`;
+const printHead=(title,sub,n,sel)=>`<h1>${esc(title)}</h1><div class="pd">${sub?esc(sub)+' · ':''}${n} ${sel?'selected ':''}book${n===1?'':'s'} · printed ${fmtDate(today())}</div>`;
 function printBooks(items,head,titles,mode,cols=COLS){
   $('#pv').innerHTML=head+(titles?titlesHtml(items):mode==='table'?tableHtml(items,true,cols):mode==='summary'?summaryHtml(items,true):items.map(b=>cardHtml(b,true)).join(''));
   let pg=$('#pgs');if(!pg){pg=document.createElement('style');pg.id='pgs';document.head.append(pg)}
@@ -224,7 +262,7 @@ function printBooks(items,head,titles,mode,cols=COLS){
   setTimeout(()=>window.print(),50);
 }
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261113d';
+const APPV='20261114a';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});

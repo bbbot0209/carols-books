@@ -164,7 +164,7 @@
 <dialog id="dlg"><form id="f" method="dialog" autocomplete="off"></form></dialog>
 <dialog id="sh" class="sm"></dialog>
 <div id="pv"></div>
-<script src="common.js?v=20261113d"></script>
+<script src="common.js?v=20261114a"></script>
 
 <script>
 const KEY='carol-books-v1',VKEY='carol-books-view';
@@ -290,12 +290,13 @@ BV.stPills=stPills;
 function render(keepOpen,refocus){
   const L=$('#list');
   if(mode==='groups'){
+    L.classList.remove('selm');
     L.innerHTML=db.groups.length?db.groups.map(g=>{
       const recs=db.books.filter(b=>gsOf(b).includes(g.name)).length;
       return `<div class="card" data-id="${g.id}"><div class="t">${esc(g.name)}</div>${g.members?`<div class="a">${esc(g.members)}</div>`:''}<div class="meta">${g.meets?`<span class="pill">${esc(g.meets)}</span>`:''}<span class="pill">${recs} book${recs===1?'':'s'}</span>${g.token?'<span class="pill sh">Shared</span>':''}</div>${g.notes?`<div class="note">${link(g.notes)}</div>`:''}<div class="gact">${g.token?'<button type="button" class="open">Shared list</button>':''}<button type="button" class="share">Share link</button></div></div>`}).join('')
       :`<div class="empty">No book groups yet.<br>Tap + to add one.</div>`;
   }else{
-    const items=shown(),n=db.books.length;
+    const items=shown(),n=db.books.length;selPrune(db.books);
     L.innerHTML=filterPanel()+crowHtml(`${viewName?`<b>${esc(viewName)}</b> · `:''}${items.length}${items.length!==n?' of '+n:''} book${(items.length!==n?n:items.length)===1?'':'s'}`,disp,items.length,COLS,view.status)+
       (items.length?listHtml(items,disp):`<div class="empty">${view.q?`“${esc(view.q)}” isn’t in your books yet.<div class="olr ac"><div class="hint">Searching online…</div></div><button type="button" class="addq">Add “${esc(view.q)}” yourself</button>`:n?'No books match this view.':'No books yet.<br>Tap + to add one.'}</div>`);
     wireFilters(L);
@@ -328,8 +329,8 @@ function onlineFind(box,q){const s=++olSeq;clearTimeout(olT);
 
 // ---------- printing ----------
 function printView(titles){
-  const items=shown();
-  printBooks(items,printHead(viewName||describe(),viewName?describe():'',items.length),titles,disp.mode);
+  const sel=selOf(db.books),items=sel?sortBy(recentRec(sel),disp):shown();   // picked books (any filter), else the view
+  printBooks(items,sel?printHead('Selected books','',items.length,true):printHead(viewName||describe(),viewName?describe():'',items.length),titles,disp.mode);
 }
 
 // Want → Read: change the status, date it today, then open it so she can rate it / adjust the date.
