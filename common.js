@@ -10,8 +10,9 @@ const GENRES={'Fiction':['Literary fiction','Mystery','Thriller & suspense','Rom
 const normCat=c=>{c=String(c||'').toLowerCase();return c.includes('non')?'Non-fiction':c.includes('fic')?'Fiction':''};
 const catOf=g=>Object.keys(GENRES).find(c=>GENRES[c].includes(g))||'';
 // Review link only (review text field removed 11/7 at Carol's request).
-const reviewHtml=b=>{const u=/^https?:\/\/\S+$/i.test(b.review||'')?b.review:'';
-  return u?`<div class="note"><a href="${esc(u)}" target="_blank" rel="noopener">Review ↗</a></div>`:''};
+// In print the full URL is written out (paper can't follow a link) — Carol 11/14.
+const reviewHtml=(b,pr)=>{const u=/^https?:\/\/\S+$/i.test(b.review||'')?b.review:'';
+  return u?(pr?`<div class="note" style="overflow-wrap:anywhere">Review: ${esc(u)}</div>`:`<div class="note"><a href="${esc(u)}" target="_blank" rel="noopener">Review ↗</a></div>`):''};
 async function api(method,path,body){
   const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
   try{
@@ -166,7 +167,7 @@ function cell(b,k,pr){const v=k==='group'?gsOf(b).join(', '):b[k];
   if(k==='status')return BV.stCell(b);
   if(k==='date'||k==='dateRec')return v?fmtDate(v):'';
   if(k==='rating')return v?`<span class="stars">${'★'.repeat(v)}</span>`:'';
-  if(k==='review')return /^https?:\/\/\S+$/i.test(v||'')?(pr?esc(v.replace(/^https?:\/\/(www\.)?/i,'').split('/')[0]):`<a href="${esc(v)}" target="_blank" rel="noopener">Review ↗</a>`):'';
+  if(k==='review')return /^https?:\/\/\S+$/i.test(v||'')?(pr?`<span style="overflow-wrap:anywhere">${esc(v)}</span>`:`<a href="${esc(v)}" target="_blank" rel="noopener">Review ↗</a>`):'';
   if(k==='notes')return esc(!pr&&(v||'').length>90?v.slice(0,90).replace(/\s+\S*$/,'')+'…':v);
   return esc(v)}
 const tableHtml=(items,pr,cols=COLS,d={})=>`<div class="tw"><table class="bt"><thead><tr>${cols.map(([k,l])=>`<th data-k="${k}"${!pr&&d.k===k?' class="on"':''}>${l}${!pr&&d.k===k?(d.dir>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead>
@@ -186,7 +187,7 @@ const cardHtml=(b,pr)=>`
           ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
           ${recPill({rec:b.by,dateRec:b.dateRec})}${addedByHtml(b.addedBy)}
         </div>
-        ${aboutHtml(b)}${reviewHtml(b)}
+        ${aboutHtml(b)}${reviewHtml(b,pr)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
       </div>`;
 // The list body for a display mode, and the count row above it: "N books   Book Details · Table · Summary   Print · Print titles".
@@ -262,7 +263,7 @@ function printBooks(items,head,titles,mode,cols=COLS){
   setTimeout(()=>window.print(),50);
 }
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261114a';
+const APPV='20261114b';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});
