@@ -103,7 +103,8 @@ const olEdition=async k=>{if(!k)return{};try{const es=(await (await fetch('https
 // Work description ("About the book") from Open Library; resolves '' on any failure.
 const olAbout=async k=>{if(!k)return'';try{const d=await (await fetch('https://openlibrary.org'+k+'.json')).json(),v=d.description;
   return String(typeof v==='object'&&v?v.value||'':v||'').replace(/\r/g,'').replace(/\(\[source\][^)]*\)/g,'').replace(/-{3,}[\s\S]*$/,'').trim().slice(0,2000)}catch{return''}};
-const aboutHtml=b=>b.about?`<div class="about">${esc(b.about.length>240?b.about.slice(0,240).replace(/\s+\S*$/,'')+'…':b.about)}</div>`:'';
+// Screen cards trim About to ~240 chars; print shows it whole (Carol 11/16).
+const aboutHtml=(b,pr)=>b.about?`<div class="about">${esc(!pr&&b.about.length>240?b.about.slice(0,240).replace(/\s+\S*$/,'')+'…':b.about)}</div>`:'';
 const recPill=b=>(b.rec||b.dateRec)?`<span class="pill">rec.${b.rec?' by '+esc(b.rec):''}${b.dateRec?(b.rec?' · ':' ')+fmtDay(b.dateRec):''}</span>`:'';
 const fmtDay=d=>{const[y,m,dd]=(d||'').split('-');return y&&m&&dd?new Date(y,m-1,dd).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):esc(d)};
 const COVER_RE=/^https:\/\/(covers\.openlibrary\.org\/b\/id\/\d{1,12}-[SML]\.jpg|is\d-ssl\.mzstatic\.com\/image\/thumb\/[\w.%\/-]{1,400}\/\d{2,4}x\d{2,4}bb\.jpg)$/;
@@ -187,7 +188,7 @@ const cardHtml=(b,pr)=>`
           ${b.rating?`<span class="stars">${'★'.repeat(b.rating)}</span>`:''}
           ${recPill({rec:b.by,dateRec:b.dateRec})}${addedByHtml(b.addedBy)}
         </div>
-        ${aboutHtml(b)}${reviewHtml(b,pr)}
+        ${aboutHtml(b,pr)}${reviewHtml(b,pr)}
         ${b.notes?`<div class="note">${link(b.notes)}</div>`:''}
       </div>`;
 // The list body for a display mode, and the count row above it: "N books   Book Details · Table · Summary   Print · Print titles".
@@ -263,7 +264,7 @@ function printBooks(items,head,titles,mode,cols=COLS){
   setTimeout(()=>window.print(),50);
 }
 // Self-update: home-screen copies cache old files, so reload once when a newer version.txt is published.
-const APPV='20261114b';
+const APPV='20261116a';
 const checkV=()=>fetch('version.txt?'+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(v=>{v=v.trim();
   if(v&&v!==APPV&&sessionStorage.getItem('cbv')!==v){sessionStorage.setItem('cbv',v);location.reload()}}).catch(()=>{});
 checkV();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkV()});
