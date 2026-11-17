@@ -1,7 +1,7 @@
 // Family Cookbook — one shared cookbook per link (#<token>); everyone with the link can view and edit.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261116d';
+const APPV='20261116e';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -38,7 +38,7 @@ async function api(method,path,body,raw){
 
 // ---------- state ----------
 let tok='',book={name:'',recipes:[]};
-const st={q:'',sort:localStorage.getItem('fc-sort')||'added',cat:'',cui:'',from:'',sel:null};  // sel = Set of ids in Select mode
+const st={q:'',sort:localStorage.getItem('fc-sort')||'added',cat:'',cui:'',from:'',by:'',sel:null};  // sel = Set of ids in Select mode
 let cur=null;      // recipe id open in the view
 let ed=null;       // edit state {id, updated, photo, blob, blobUrl}
 const byId=id=>book.recipes.find(r=>r.id===id);
@@ -53,51 +53,55 @@ const stripNum=l=>l.replace(/^(step\s*)?\d{1,2}\s*[.):-]\s+/i,'');
 const ingHtml=s=>lines(s).map(l=>isSub(l)?`<li class="sub">${esc(l)}</li>`:`<li>${esc(stripBullet(l))}</li>`).join('');
 const stepHtml=s=>lines(s).map(l=>isSub(l)?`<li class="sub">${esc(l)}</li>`:`<li>${esc(stripNum(stripBullet(l)))}</li>`).join('');
 const fromTxt=r=>r.from?'From '+r.from:'';
+const byTxt=r=>r.addedBy?'Added by '+r.addedBy:'';   // the family member who entered it (v20261116e)
+const AB_KEY='fc-addedby';   // last “Added by” typed on this device
 
 // ---------- search / sort / filter ----------
 function matches(r,qw){
   if(!qw.length)return true;
-  const ws=words([r.title,r.ingredients,r.from,...catsOf(r),...cuisOf(r),r.notes].join(' '));
+  const ws=words([r.title,r.ingredients,r.from,r.addedBy,...catsOf(r),...cuisOf(r),r.notes].join(' '));
   return qw.every(q=>ws.some(w=>w.startsWith(q)));
 }
 const cmpTxt=(a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true});
 function sorted(list){
   const t=(a,b)=>cmpTxt(a.title,b.title),blankLast=g=>(a,b)=>{const x=g(a),y=g(b);return (!x)-(!y)||cmpTxt(x||'',y||'')||t(a,b)};
   const first=of=>r=>[...of(r)].sort(cmpTxt)[0]||'';   // sort by the alphabetically-first value
-  const f={added:(a,b)=>(b.added||0)-(a.added||0)||t(a,b),title:t,category:blankLast(first(catsOf)),cuisine:blankLast(first(cuisOf)),from:blankLast(r=>r.from)}[st.sort]||t;
+  const f={added:(a,b)=>(b.added||0)-(a.added||0)||t(a,b),title:t,category:blankLast(first(catsOf)),cuisine:blankLast(first(cuisOf)),from:blankLast(r=>r.from),addedby:blankLast(r=>r.addedBy)}[st.sort]||t;
   return [...list].sort(f);
 }
 function visible(){
   const qw=words(st.q);
-  return sorted(book.recipes.filter(r=>matches(r,qw)&&(!st.cat||catsOf(r).includes(st.cat))&&(!st.cui||cuisOf(r).includes(st.cui))&&(!st.from||(r.from||'')===st.from)));
+  return sorted(book.recipes.filter(r=>matches(r,qw)&&(!st.cat||catsOf(r).includes(st.cat))&&(!st.cui||cuisOf(r).includes(st.cui))&&(!st.from||(r.from||'')===st.from)&&(!st.by||(r.addedBy||'')===st.by)));
 }
 const uniq=k=>[...new Set(book.recipes.map(r=>(r[k]||'').trim()).filter(Boolean))].sort(cmpTxt);
 const uniqL=of=>[...new Set(book.recipes.flatMap(r=>of(r).map(x=>String(x).trim())).filter(Boolean))].sort(cmpTxt);
 
 // ---------- list ----------
 function fillFilters(){
-  const cats=uniqL(catsOf),cuis=uniqL(cuisOf),froms=uniq('from');
+  const cats=uniqL(catsOf),cuis=uniqL(cuisOf),froms=uniq('from'),bys=uniq('addedBy');
   if(st.cat&&!cats.includes(st.cat))st.cat='';
   if(st.cui&&!cuis.includes(st.cui))st.cui='';
   if(st.from&&!froms.includes(st.from))st.from='';
+  if(st.by&&!bys.includes(st.by))st.by='';
   const opts=(all,list,v)=>`<option value="">${all}</option>`+list.map(c=>`<option${c===v?' selected':''}>${esc(c)}</option>`).join('');
-  $('#fcat').innerHTML=opts('Category',cats,st.cat);$('#fcui').innerHTML=opts('Cuisine',cuis,st.cui);$('#ffrom').innerHTML=opts('From',froms,st.from);
-  $('#fcat').classList.toggle('on',!!st.cat);$('#fcui').classList.toggle('on',!!st.cui);$('#ffrom').classList.toggle('on',!!st.from);
+  $('#fcat').innerHTML=opts('Category',cats,st.cat);$('#fcui').innerHTML=opts('Cuisine',cuis,st.cui);$('#ffrom').innerHTML=opts('From',froms,st.from);$('#fby').innerHTML=opts('Added by',bys,st.by);
+  $('#fcat').classList.toggle('on',!!st.cat);$('#fcui').classList.toggle('on',!!st.cui);$('#ffrom').classList.toggle('on',!!st.from);$('#fby').classList.toggle('on',!!st.by);
   $('#sort').value=st.sort;
   $('#froms').innerHTML=froms.map(c=>`<option value="${esc(c)}">`).join('');
+  $('#addedbys').innerHTML=bys.map(c=>`<option value="${esc(c)}">`).join('');
 }
 function cardHtml(r){
   const th=r.photo?`<img class="th" src="${esc(photoUrl(r.photo))}" alt="" loading="lazy">`:`<div class="th ph0">${esc((r.title||'?').trim()[0]||'?').toUpperCase()}</div>`;
   const sel=st.sel&&st.sel.has(r.id);
   return `<button class="card${sel?' sel':''}" data-id="${esc(r.id)}">${st.sel?'<span class="tick">✓</span>':''}${th}<div class="cb"><div class="ct">${esc(r.title)}</div>`+
-    (r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:'')+
+    (r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:'')+(r.addedBy?`<div class="ab">${esc(byTxt(r))}</div>`:'')+
     ((catsOf(r).length||cuisOf(r).length||r.time)?`<div class="meta">${catsOf(r).map(c=>`<span class="pill c">${esc(c)}</span>`).join('')}${cuisOf(r).map(c=>`<span class="pill u">${esc(c)}</span>`).join('')}${r.time?`<span class="pill">${esc(r.time)}</span>`:''}</div>`:'')+`</div></button>`;
 }
 function render(){
   $('#bname').textContent=book.name||'Family Cookbook';
   document.title=book.name||'Family Cookbook';
   fillFilters();
-  const v=visible(),n=book.recipes.length,filt=st.q||st.cat||st.cui||st.from;
+  const v=visible(),n=book.recipes.length,filt=st.q||st.cat||st.cui||st.from||st.by;
   $('#count').textContent=filt?`${v.length} of ${n} recipe${n===1?'':'s'}`:`${n} recipe${n===1?'':'s'}`;
   $('#prall').hidden=!v.length||!!st.sel;$('#selbtn').hidden=!n||!!st.sel;
   $('#list').innerHTML=v.length?v.map(cardHtml).join(''):`<div class="empty">${n?'No matches':'No recipes yet'}</div>`;
@@ -126,11 +130,11 @@ function recipeHtml(r,pr){
   const facts=[cs&&[catsOf(r).length>1?'Categories':'Category',cs],us&&['Cuisine',us],r.time&&['Time',r.time],r.servings&&['Serves',r.servings]].filter(Boolean)
     .map(([k,v])=>`<span class="fact"><span>${k}</span>${esc(v)}</span>`).join('');
   const ing=ingHtml(r.ingredients),stp=stepHtml(r.steps);
-  if(pr)return `<article class="pr">${r.photo?`<img src="${esc(photoUrl(r.photo))}" alt="">`:''}<h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}`+
+  if(pr)return `<article class="pr">${r.photo?`<img src="${esc(photoUrl(r.photo))}" alt="">`:''}<h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}${r.addedBy?`<div class="ab">${esc(byTxt(r))}</div>`:''}`+
     (facts?`<div class="facts">${[cs&&(catsOf(r).length>1?'Categories: ':'Category: ')+cs,us&&'Cuisine: '+us,r.time&&'Time: '+r.time,r.servings&&'Serves: '+r.servings].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ')}</div>`:'')+
     (ing?`<h3>Ingredients</h3><ul>${ing}</ul>`:'')+(stp?`<h3>Steps</h3><ol>${stp}</ol>`:'')+
     (r.notes?`<h3>Notes</h3><div class="notes">${esc(r.notes)}</div>`:'')+`<div class="clear"></div></article>`;
-  return (r.photo?`<img class="hero" src="${esc(photoUrl(r.photo))}" alt="">`:'')+`<div class="rv"><h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}`+
+  return (r.photo?`<img class="hero" src="${esc(photoUrl(r.photo))}" alt="">`:'')+`<div class="rv"><h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}${r.addedBy?`<div class="ab">${esc(byTxt(r))}</div>`:''}`+
     (facts?`<div class="facts">${facts}</div>`:'')+
     (ing?`<h3>Ingredients</h3><ul class="ing">${ing}</ul>`:'')+(stp?`<h3>Steps</h3><ol class="stp">${stp}</ol>`:'')+
     (r.notes?`<h3>Notes</h3><div class="notes">${linkify(r.notes)}</div>`:'')+
@@ -143,12 +147,12 @@ function renderView(){
 }
 
 // ---------- edit ----------
-const FIELDS=['title','from','servings','time','ingredients','steps','notes'];
+const FIELDS=['title','from','addedBy','servings','time','ingredients','steps','notes'];
 function fillForm(r){
   FIELDS.forEach(k=>$('#f-'+k).value=r[k]||'');
   ed.categories=[...catsOf(r)];ed.cuisines=[...cuisOf(r)];
   if(ed.blobUrl)URL.revokeObjectURL(ed.blobUrl);
-  ed.blob=null;ed.blobUrl='';ed.photo=r.photo||'';ed.updated=r.updated;
+  ed.blob=null;ed.blobUrl='';ed.photo=r.photo||'';ed.updated=r.updated;ed.abBase=r.addedBy||'';
   showPhoto();pickers();
 }
 function showPhoto(){
@@ -176,6 +180,8 @@ function openEdit(id,pushIt=true){
   ed={id:id||'',photo:'',blob:null,blobUrl:''};
   $('#ett').textContent=id?'Edit recipe':'New recipe';$('#edel').hidden=!id;
   fillForm(r);
+  // new recipes start with this device's last “Added by”; editing keeps the recipe's own (even if blank)
+  ed.abTyped=false;if(!id){ed.abBase=localStorage.getItem(AB_KEY)||'';$('#f-addedBy').value=ed.abBase}
   $('#edit').hidden=false;$('#edit').scrollTop=0;modal();
   if(pushIt)push('edit');
   if(!id)setTimeout(()=>$('#f-title').focus(),50);
@@ -189,7 +195,7 @@ function closeEdit(fromPop,then){
   if(typeof importQ!=='undefined'&&importQ.length)setTimeout(nextImport,350);   // next dropped/picked file
 }
 const dirty=()=>{if(!ed)return false;const r=ed.id?byId(ed.id)||{}:{};
-  return !!ed.blob||ed.photo!==(r.photo||'')||FIELDS.some(k=>$('#f-'+k).value.trim()!==(r[k]||'').trim())
+  return !!ed.blob||ed.photo!==(r.photo||'')||FIELDS.some(k=>$('#f-'+k).value.trim()!==(k==='addedBy'?ed.abBase:(r[k]||'')).trim())
     ||ed.categories.join('\n')!==catsOf(r).join('\n')||ed.cuisines.join('\n')!==cuisOf(r).join('\n')||Object.keys(TAGS).some(k=>$('#pk-'+k+' input').value.trim())};
 
 // Downscale a picked photo to ≤1200px JPEG under ~590 KB.
@@ -219,6 +225,7 @@ async function save(){
   const data={};FIELDS.forEach(k=>data[k]=$('#f-'+k).value.trim());
   data.categories=[...ed.categories];data.cuisines=[...ed.cuisines];
   if(!data.title){msg('Add a title');$('#f-title').focus();return}
+  if(ed.abTyped){try{data.addedBy?localStorage.setItem(AB_KEY,data.addedBy):localStorage.removeItem(AB_KEY)}catch{}}
   saving=true;['#esave','#esave2'].forEach(s=>{$(s).disabled=true});$('#esave').textContent='Saving…';
   try{
     if(ed.blob){const p=await api('POST',`/books/${tok}/photos`,null,ed.blob);ed.photo=p.photo;URL.revokeObjectURL(ed.blobUrl);ed.blob=null;ed.blobUrl=''}
@@ -238,7 +245,7 @@ async function save(){
       const i=book.recipes.findIndex(x=>x.id===r.id);if(i>=0)book.recipes[i]=r;else book.recipes.push(r);
     }else{
       r=await api('POST',`/books/${tok}/recipes`,data);book.recipes.push(r);
-      if(!visible().some(x=>x.id===r.id)){st.q='';$('#q').value='';st.cat=st.cui=st.from=''}
+      if(!visible().some(x=>x.id===r.id)){st.q='';$('#q').value='';st.cat=st.cui=st.from=st.by=''}
     }
     saveCache();render();
     closeEdit(false,ed.id||(ed.fromImport&&importQ.length)?null:()=>openView(r.id));
@@ -297,7 +304,7 @@ function boot(){
     tok='';showStart();return;
   }
   if(!/^[A-Za-z0-9_-]{24,64}$/.test(h)){tok='';showStart();msg('That cookbook link didn’t work',6000);return}
-  if(h!==tok){tok=h;st.q='';st.cat=st.cui=st.from='';st.sel=null;$('#q').value='';
+  if(h!==tok){tok=h;st.q='';st.cat=st.cui=st.from=st.by='';st.sel=null;$('#q').value='';
     try{book=JSON.parse(localStorage.getItem(cacheKey())||'null')||{name:'',recipes:[]}}catch{book={name:'',recipes:[]}}}
   localStorage.setItem('fc-last',tok);
   $('#start').hidden=true;$('#app').hidden=false;render();refresh();
@@ -318,6 +325,8 @@ $('#sort').onchange=e=>{st.sort=e.target.value;localStorage.setItem('fc-sort',st
 $('#fcat').onchange=e=>{st.cat=e.target.value;render()};
 $('#fcui').onchange=e=>{st.cui=e.target.value;render()};
 $('#ffrom').onchange=e=>{st.from=e.target.value;render()};
+$('#fby').onchange=e=>{st.by=e.target.value;render()};
+$('#f-addedBy').oninput=()=>{if(ed)ed.abTyped=true};
 $('#list').onclick=e=>{const c=e.target.closest('.card');if(!c)return;const id=c.dataset.id;
   if(st.sel){st.sel.has(id)?st.sel.delete(id):st.sel.add(id);render();return}
   openView(id)};

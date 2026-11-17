@@ -45,7 +45,7 @@
   .search input{padding-left:42px}
   .search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:20px;height:20px;color:var(--mute)}
   .search .clr{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:0;background:none;font-size:24px;color:var(--mute)}
-  .fl{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+  .fl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
   .fl select,.sortsel{width:100%;min-width:0;min-height:44px;text-overflow:ellipsis;padding:8px 30px 8px 12px;border:1.5px solid var(--line);border-radius:12px;font-size:16px;-webkit-appearance:none;appearance:none;
     background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236f6258' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 11px center}
   .sortsel{width:auto!important;flex:0 1 auto;border:0!important;background-color:transparent!important;padding-left:2px!important;padding-right:24px!important;background-position:right 4px center!important;color:var(--grn);font-weight:600}
@@ -63,6 +63,7 @@
   .cb{flex:1;min-width:0}
   .ct{font:600 20px/1.25 Georgia,serif;margin:0 0 3px;overflow-wrap:anywhere}
   .cf{color:var(--mute);font-size:16px}
+  .ab{color:var(--mute);font-size:14px;font-style:italic}
   .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .pill{font-size:14px;padding:3px 10px;border-radius:99px;background:var(--soft);color:var(--ink)}
   .pill.c{background:#f6dccf;color:var(--acc-d)}
@@ -152,6 +153,7 @@
     .pr:last-child{border-bottom:0}
     .pr h2{font-size:20pt;margin:0 0 2pt}
     .pr .cf{color:#444;font-size:11pt}
+    .pr .ab{color:#555;font-size:10pt}
     .pr img{float:right;width:2.4in;max-height:2.6in;object-fit:cover;margin:0 0 8pt 12pt;border-radius:4pt}
     .pr .facts{font-size:10.5pt;color:#333;margin:4pt 0}
     .pr h3{font-size:13pt;margin:10pt 0 4pt;border-bottom:1px solid #ccc}
@@ -194,11 +196,12 @@
       <select id="fcat" aria-label="Category"></select>
       <select id="fcui" aria-label="Cuisine"></select>
       <select id="ffrom" aria-label="From"></select>
+      <select id="fby" aria-label="Added by"></select>
     </div>
   </header>
   <main>
     <div class="crow"><select id="sort" class="sortsel" aria-label="Sort">
-        <option value="added">Recently added</option><option value="title">Title A→Z</option><option value="category">Category</option><option value="cuisine">Cuisine</option><option value="from">From</option>
+        <option value="added">Recently added</option><option value="title">Title A→Z</option><option value="category">Category</option><option value="cuisine">Cuisine</option><option value="from">From</option><option value="addedby">Added by</option>
       </select><span class="sp"></span><button class="lnk" id="selbtn">Select</button><button class="lnk" id="prall">Print all</button></div>
     <div class="count" id="count"></div>
     <div id="list"></div>
@@ -225,6 +228,9 @@
       <label for="f-from">From</label>
       <input class="inp" id="f-from" maxlength="100" placeholder="e.g. Grandma Ruth" list="froms">
       <datalist id="froms"></datalist>
+      <label for="f-addedBy">Added by</label>
+      <input class="inp" id="f-addedBy" maxlength="100" placeholder="Your name" list="addedbys" autocomplete="off">
+      <datalist id="addedbys"></datalist>
       <label>Category</label>
       <div class="pk" id="pk-categories"><div class="pks"></div><div class="pkrow"><input class="inp" maxlength="60" placeholder="New category" aria-label="New category" enterkeyhint="done"><button type="button" class="btn pkadd">Add</button></div></div>
       <label>Cuisine</label>
@@ -248,7 +254,7 @@
 <div id="busy" hidden><div><i></i><span id="busyt">Reading…</span></div></div>
 <div id="print"></div>
 <div id="msg" role="status"></div>
-<script src="app.js?v=20261116d"></script>
-<script src="import.js?v=20261116d"></script>
+<script src="app.js?v=20261116e"></script>
+<script src="import.js?v=20261116e"></script>
 </body>
 </html>
