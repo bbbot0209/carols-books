@@ -15,84 +15,143 @@ const loadScript=src=>loaded[src]||(loaded[src]=new Promise((res,rej)=>{const s=
 // ---------- busy overlay ----------
 function busy(t){const b=$('#busy');if(t===false){b.hidden=true;return}b.hidden=false;$('#busyt').textContent=t}
 
-// ---------- text → recipe fields ----------
-const HEAD_RE=/^(?:#+\s*)?(ingredients?|directions?|instructions?|method|preparation|steps?|notes?|tips?|for the [\w ]{2,30})\s*:?\s*$/i;
-const secKind=h=>{h=h.toLowerCase();return /^ingredient/.test(h)?'ing':/^(direction|instruction|method|preparation|step)/.test(h)?'stp':/^(note|tip)/.test(h)?'notes':'sub'};
+// ---------- text → recipe fields: STRICT section parser (v20261116c) ----------
+// A line that is a KNOWN header starts a section; its content runs until the next known header line.
+// Unknown header-looking lines are just content. Headers may carry content on the same line
+// ("Ingredients: 2 cups flour", "INGREDIENTS 2 cups flour", "Serves 4", "Prep time: 10 min | Cook time: 1 hr").
+// Text before the first header = title (first line) + intro (→ notes). Only when there are NO ingredient/step
+// headers at all do we fall back to guessing (quantity-looking lines → ingredients, the rest → steps).
+const AP="(?:'|’)?";
+const HDRS=[
+  ['ing','ingredients?|ingredient\\s*list'],
+  ['stp','instructions?|steps?|directions?|methods?|preparations?'],
+  ['notes',`cook${AP}s\\s*notes?|chef${AP}s\\s*notes?|recipe\\s*notes?|notes?|tips?`],
+  ['time','(?:prep(?:aration)?|cook(?:ing)?|total|bake|baking|active|inactive|chill(?:ing)?|rest(?:ing)?|ready\\s*in)\\s*times?|times?'],
+  ['time2','prep|cook|total|ready\\s*in'],           // short forms: need a colon
+  ['servings','servings?|serves|yields?|makes|portions?'],
+  ['category','categor(?:y|ies)|course'],
+  ['cuisine','cuisines?'],
+  ['from',`from|source|recipe\\s*from|submitted\\s*by|courtesy\\s*of`],
+].map(([k,src])=>[k,new RegExp('^('+src+')','i')]);
+const META=new Set(['time','servings','category','cuisine','from']);
 const BULLET_RE=/^\s*(?:[-–—•*·▪▢□☐◦‣○●]|\[\s?\])\s*/;
-const NUM_RE=/^\s*(?:step\s*)?\d{1,2}\s*[.)]\s+|^\s*step\s*\d{1,2}\s*[:.)-]?\s*/i;
+const NUM_RE=/^\s*(?:step\s*)?\d{1,2}\s*[.):]\s*|^\s*step\s*\d{1,2}\s*[:.)-]?\s*/i;
 const FRAC='½¼¾⅓⅔⅛⅜⅝⅞';
 const UNIT='(?:cups?|c\\.|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|t\\.|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|quarts?|qt|pints?|pt|gallons?|cans?|cloves?|sticks?|slices?|pinch(?:es)?|dash(?:es)?|packages?|pkgs?|envelopes?|bunch(?:es)?|heads?|large|medium|small|whole|handful)';
 const QTY_RE=new RegExp(`^(?:\\d+(?:[./]\\d+)?(?:\\s*-\\s*\\d+)?|[${FRAC}]|\\d+\\s*[${FRAC}]|(?:a|one|two|three|four|five|six|half)\\s+${UNIT}\\b)\\s*(?:${UNIT}\\b|[a-z]|\\()`,'i');
 const isQty=l=>QTY_RE.test(l.replace(BULLET_RE,''))&&!/^\s*\d{1,2}\s*[.)]\s/.test(l)&&l.length<=120
   ||/^(?:salt|pepper|salt and pepper|salt & pepper)\b/i.test(l.replace(BULLET_RE,''))&&l.length<40;
 const clean=l=>l.replace(BULLET_RE,'').replace(NUM_RE,'').trim();
-// a value runs until a separator, the end, or the next meta keyword ("Prep Time: 20 min   Cook Time: 3 hr")
-const END='(?=\\s*(?:[|•;,]|$)|\\s+(?:prep|preparation|cook|cooking|total|bake|baking|active|inactive|chill|serves|servings?|yields?|makes)\\b)';
-const SERV_RE=new RegExp('\\b(?:serves|servings?|yields?|makes)\\b\\s*:?\\s*([^|•;\\n]{1,40}?)'+END.replace('|serves|servings?',''),'i');
-const TIME_RE=new RegExp('\\b(prep(?:aration)?|cook(?:ing)?|total|bake|baking|active|inactive|chill(?:ing)?)\\s*(?:time)?\\s*:\\s*([^|•;\\n,]{1,30}?)'+END+
-  '|\\b(prep(?:aration)?|cook(?:ing)?|total|bake|baking)\\s+time\\s*:?\\s*([^|•;\\n,]{1,30}?)'+END+'|^\\s*time\\s*:\\s*([^|•;\\n]{1,40}?)'+END,'gi');
 const capWord=w=>w[0].toUpperCase()+w.slice(1).toLowerCase();
+// split "20 minutes Cook Time: 3 hours" before the next meta keyword
+const META_IN=/\s+(?=(?:(?:prep(?:aration)?|cook(?:ing)?|total|bake|baking|active|inactive|chill(?:ing)?|rest(?:ing)?)\s*time\b|(?:serves|servings?|yields?|makes|cuisines?|categor(?:y|ies)|course|source|from|prep|cook|total)\s*[:：]))/i;
 
-function metaOf(line){
-  // pull servings/time out of a line; returns {servings, times[], rest}
-  let rest=line,servings='',times=[];
-  const sm=line.match(SERV_RE);if(sm){servings=sm[1].trim().replace(/[.\s]+$/,'');rest=rest.replace(sm[0],' ')}
-  for(const m of line.matchAll(TIME_RE)){
-    const k=m[1]||m[3],v=(m[2]||m[4]||m[5]||'').trim().replace(/[.\s]+$/,'');if(!v)continue;
-    times.push(k?capWord(k.replace(/^preparation$/i,'prep').replace(/^cooking$/i,'cook'))+' '+v:v);rest=rest.replace(m[0],' ')}
-  return{servings,times,rest:rest.replace(/[|•;,\s]+/g,' ').trim()};
+function header(line,joined){
+  let s=line.replace(/\*\*|__/g,'').replace(/^[\s#>*_]+/,'').trim();
+  let best=null;
+  for(const [kind,re] of HDRS){const m=s.match(re);if(m&&(!best||m[1].length>best.word.length))best={kind,word:m[1]}}
+  if(!best)return joined?null:(line.length<=30&&/\s/.test(line.trim())?header(line.replace(/\s+/g,''),true):null);
+  let rest=s.slice(best.word.length);
+  if(/^[a-z]/.test(rest))return null;                    // "Notebook", "Stepsister", "Ingredientsflour"
+  const glued=/^[A-Z]/.test(rest);                        // "IngredientsFor the crust:" (merged by the reader)
+  rest=rest.replace(/^\s*\([^)]{0,40}\)/,'');            // "Ingredients (for 4)"
+  const sep=rest.match(/^\s*[:：=–—-]\s*/);
+  rest=(sep?rest.slice(sep[0].length):rest).replace(/^[\s*_]+|[\s*_]+$/g,'');
+  let kind=best.kind;
+  if(kind==='time2'){if(!sep)return null;kind='time'}
+  if(rest&&!sep){
+    const caps=best.word===best.word.toUpperCase()&&/[A-Z]{3}/.test(best.word);
+    let ok=false;
+    if(kind==='servings')ok=/^(?:about\s+|approx\.?\s+|up to\s+)?[\d½¼¾⅓⅔]|^(?:one|two|three|four|five|six|eight|ten|twelve|a dozen|about)\b/i.test(rest);
+    else if(kind==='time')ok=!/^times?$/i.test(best.word)&&/^(?:about\s+|approx\.?\s+|under\s+)?\d/i.test(rest);
+    else if(kind==='ing'||kind==='stp'||kind==='notes'){
+      if(/^steps?$/i.test(best.word)&&/^\d/.test(rest))return null;   // "Step 1 …" is a step, not a header
+      ok=caps||glued||/^[\d½¼¾⅓⅔⅛•·*(–-]/.test(rest)||(rest.endsWith(':')&&rest.length<=40);
+    }
+    if(!ok)return null;
+  }
+  return{kind,word:best.word.replace(/\s+/g,' '),rest};
 }
+const timeLabel=w=>{w=w.toLowerCase().replace(/\s*times?$/,'').replace(/^preparation$/,'prep').replace(/^cooking$/,'cook').replace(/^baking$/,'bake').replace(/^chilling$/,'chill').replace(/^resting$/,'rest');return w?capWord(w):''};
+const splitTags=v=>v.split(/\s*[,;/|•·]\s*|\s+(?:and|&)\s+/).map(x=>x.replace(/^[\s*_-]+|[\s*_.]+$/g,'')).filter(x=>x&&x.length<=60);
+function normTags(list,sug){const out=[],seen=new Set();
+  for(let v of list){v=v.trim();const k=sug.find(x=>x.toLowerCase()===v.toLowerCase());v=k||v.replace(/^\p{Ll}/u,c=>c.toUpperCase());
+    if(v&&!seen.has(v.toLowerCase())){seen.add(v.toLowerCase());out.push(v)}}
+  return out.slice(0,12)}
 
 // Join wrapped lines: when a section uses markers (bullets/numbers), unmarked lines continue the previous item.
 function joinWrapped(lines){
-  const marked=lines.filter(l=>BULLET_RE.test(l)||NUM_RE.test(l)).length;
-  if(marked<2)return lines;
+  const mk=l=>BULLET_RE.test(l)||NUM_RE.test(l);
+  if(lines.filter(mk).length<2)return lines;
   const out=[];
   for(const l of lines){
-    if(out.length&&!(BULLET_RE.test(l)||NUM_RE.test(l))&&!/:$/.test(l)&&!/:$/.test(out[out.length-1]))out[out.length-1]+=' '+l.trim();
+    if(out.length&&!mk(l)&&!/:$/.test(l)&&!/:$/.test(out[out.length-1]))out[out.length-1]+=' '+l.trim();
     else out.push(l);
   }
   return out;
 }
 
 function parseText(text,fallbackTitle=''){
-  const raw=String(text||'').replace(/\r\n?/g,'\n').replace(/ /g,' ');
-  const lines=raw.split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(l=>l&&!/^[-=_*#~.]{3,}$/.test(l));
-  const r={title:'',ingredients:'',steps:'',servings:'',time:'',notes:'',category:''};
-  const times=[],pre=[],secs={ing:[],stp:[],notes:[]};
-  let cur=null,sawHead=false,lastMain=null;
-  for(let l of lines){
-    l=l.replace(/^#+\s*/,'');
-    const h=l.match(HEAD_RE);
-    if(h){const k=secKind(h[1]);sawHead=true;
-      if(k==='sub'){const tgt=cur==='stp'||lastMain==='stp'?'stp':'ing';cur=cur||tgt;secs[cur==='notes'?'ing':cur].push(capWord(h[1])+':');}
-      else{cur=k;if(k!=='notes')lastMain=k}
-      continue}
-    const nm=l.match(/^(?:notes?|tips?)\s*:\s*(.+)$/i);
-    if(nm){cur='notes';secs.notes.push(nm[1]);continue}
-    const m=metaOf(l);
-    if((m.servings||m.times.length)&&m.rest.length<12&&cur!=='stp'){if(m.servings&&!r.servings)r.servings=m.servings;times.push(...m.times);continue}
-    if(!r.title&&!cur&&/\p{L}{2}/u.test(l)&&l.length<=100&&!/^https?:/i.test(l)){r.title=l.replace(/^recipe\s*:\s*/i,'');continue}
-    if(cur)secs[cur].push(l);else pre.push(l);
+  const raw=String(text||'').replace(/\r\n?/g,'\n').replace(/[   ]/g,' ').replace(/[​﻿]/g,'');
+  const r={title:'',ingredients:'',steps:'',servings:'',time:'',notes:'',from:'',categories:[],cuisines:[]};
+  const sec={pre:[],ing:[],stp:[],notes:[]},times=[];
+  let main='pre',meta=null,sawMain=false;
+  const apply=(kind,word,val)=>{
+    for(const part of String(val).split(META_IN)){       // "20 minutes Cook Time: 3 hours"
+      const h=part!==val?header(part):null;
+      if(h&&META.has(h.kind)){apply(h.kind,h.word,h.rest);continue}
+      const v=part.trim().replace(/[.;,]+$/,'');if(!v)continue;
+      if(kind==='servings'){if(!r.servings)r.servings=v}
+      else if(kind==='time'){const lb=timeLabel(word);times.push(lb?lb+' '+v:v)}
+      else if(kind==='category')r.categories.push(...splitTags(v));
+      else if(kind==='cuisine')r.cuisines.push(...splitTags(v));
+      else if(kind==='from'){if(!r.from)r.from=v}
+    }
+  };
+  for(const rawLine of raw.split('\n')){
+    const l=rawLine.replace(/[ \t]+/g,' ').trim();
+    if(!l){if(meta)meta.blank=true;sec[main].push('');continue}
+    if(/^[-=_*#~.]{3,}$/.test(l))continue;
+    // "Prep time: 15 min | Cook time: 1 hr | Serves: 8" (or tab / wide-space separated)
+    const segs=rawLine.trim().split(/\s*[|•·\t]\s*|\s{3,}/).map(x=>x.trim()).filter(Boolean);
+    if(segs.length>1){const h0=header(segs[0]);
+      if(h0&&META.has(h0.kind)&&h0.kind!=='category'&&h0.kind!=='cuisine'){const extra=[];
+        for(const sg of segs){const h=header(sg);if(h&&META.has(h.kind)){if(h.rest)apply(h.kind,h.word,h.rest)}else extra.push(sg)}
+        if(extra.length)sec[main].push(extra.join(' '));meta=null;continue}}
+    const h=header(l);
+    if(h){
+      if(META.has(h.kind)){meta=null;if(h.rest)apply(h.kind,h.word,h.rest);else meta={kind:h.kind,word:h.word,n:0};continue}
+      main=h.kind;meta=null;if(main!=='notes')sawMain=true;
+      if(h.rest)sec[main].push(h.rest);
+      continue;
+    }
+    if(meta){   // a standalone meta header ("Cuisine" ⏎ "Italian") takes the short line(s) right after it
+      const multi=meta.kind==='category'||meta.kind==='cuisine';
+      if(l.length<=60&&(meta.n===0||(multi&&!meta.blank))){apply(meta.kind,meta.word,l);meta.n++;if(!multi)meta=null;continue}
+      meta=null;
+    }
+    sec[main].push(l);
   }
-  if(sawHead&&!secs.ing.length&&secs.stp.length){       // steps had a heading but the ingredients didn't
-    const q=pre.filter(isQty);if(q.length>=2){secs.ing=q;for(const l of q)pre.splice(pre.indexOf(l),1)}
+  const nb=a=>a.filter(Boolean);
+  const pre=[...sec.pre];while(pre.length&&!pre[0])pre.shift();
+  if(pre.length&&pre[0].length<=120)r.title=pre.shift().replace(/^#+\s*/,'').replace(/\*\*|__/g,'').replace(/^recipe\s*:\s*/i,'').trim();
+  if(/\p{Lu}{3}/u.test(r.title)&&r.title===r.title.toUpperCase())r.title=r.title.toLowerCase().replace(/(^|[\s(-])(\p{L})/gu,(m,a,c)=>a+c.toUpperCase());   // MANDEL BREAD → Mandel Bread
+  let intro=pre;
+  if(!sawMain){   // no Ingredients/Steps headers anywhere → guess from the body
+    const body=nb(intro);
+    if(body.some(isQty)){sec.ing=body.filter(isQty);sec.stp=body.filter(l=>!isQty(l));intro=[]}
   }
-  if(!sawHead||(!secs.ing.length&&!secs.stp.length)){
-    // no headings: quantity-looking lines → ingredients, the rest → steps
-    const all=[...pre,...secs.ing,...secs.stp];pre.length=0;secs.ing=[];secs.stp=[];
-    for(const l of all)(isQty(l)?secs.ing:secs.stp).push(l);
-    if(!secs.ing.length){secs.stp=[];pre.push(...all)}   // nothing recipe-like → leave it all for notes
-  }
-  r.ingredients=joinWrapped(secs.ing).map(clean).filter(Boolean).join('\n');
-  r.steps=joinWrapped(secs.stp).map(clean).filter(Boolean).join('\n');
-  r.notes=[...pre,...secs.notes].join('\n');
+  r.ingredients=joinWrapped(nb(sec.ing)).map(clean).filter(Boolean).join('\n');
+  r.steps=joinWrapped(nb(sec.stp)).map(clean).filter(Boolean).join('\n');
+  const tidy=a=>a.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  r.notes=[tidy(intro),tidy(sec.notes)].filter(Boolean).join('\n\n');
   r.time=[...new Set(times)].join(', ').slice(0,120);
-  r.servings=r.servings.slice(0,60);
+  r.servings=r.servings.slice(0,60);r.from=r.from.slice(0,100);
+  r.categories=normTags(r.categories,CATS);r.cuisines=normTags(r.cuisines,CUISINES);
   if(!r.title)r.title=fallbackTitle;
   r.title=r.title.slice(0,200);
   r.ok=!!(r.ingredients||r.steps);
-  if(!r.ok){r.notes=raw.trim();r.ingredients=r.steps=''}
+  if(!r.ok){r.notes=raw.replace(/\n{3,}/g,'\n\n').trim();r.ingredients=r.steps=''}
   return r;
 }
 
@@ -121,17 +180,18 @@ function fromLd(rc){
   const y=rc.recipeYield;let serv=Array.isArray(y)?(y.find(v=>/\D/.test(String(v)))||y[0]):y;serv=decodeEnt(serv||'');
   const times=[['Prep',rc.prepTime],['Cook',rc.cookTime],['Total',rc.totalTime]].filter(([,v])=>v).map(([k,v])=>k+' '+isoDur(v));
   const ings=(Array.isArray(rc.recipeIngredient||rc.ingredients)?rc.recipeIngredient||rc.ingredients:[rc.recipeIngredient||rc.ingredients]).filter(Boolean).map(decodeEnt);
-  const cat=decodeEnt(one(rc.recipeCategory)||'');
-  const catMatch=CATS.find(c=>c.toLowerCase()===cat.toLowerCase()||cat.toLowerCase().startsWith(c.toLowerCase()))||(/main|entr[eé]e|dinner/i.test(cat)?'Main':/dessert|sweet/i.test(cat)?'Dessert':cat);
+  const tags=v=>(Array.isArray(v)?v:[v]).filter(Boolean).flatMap(x=>splitTags(decodeEnt(x)));
+  const catMap=c=>CATS.find(x=>x.toLowerCase()===c.toLowerCase())||(/^(main|entr[eé]e|dinner)/i.test(c)?'Main':/^(dessert|sweet)/i.test(c)?'Dessert':/^(appetizer|starter)/i.test(c)?'Appetizer':/^(side)/i.test(c)?'Side':/^(drink|beverage|cocktail)/i.test(c)?'Drinks':c);
   const r={title:decodeEnt(rc.name||''),ingredients:ings.join('\n'),steps:stepsOf(rc.recipeInstructions).map(clean).join('\n'),
-    servings:serv.slice(0,60),time:times.join(', ').slice(0,120),category:catMatch.slice(0,60),notes:decodeEnt(rc.description||'')};
+    servings:serv.slice(0,60),time:times.join(', ').slice(0,120),notes:decodeEnt(rc.description||''),from:'',
+    categories:normTags(tags(rc.recipeCategory).map(catMap),CATS),cuisines:normTags(tags(rc.recipeCuisine),CUISINES)};
   r.ok=!!(r.ingredients||r.steps);
   return r;
 }
 
 // ---------- HTML → readable text ----------
 function htmlText(root){
-  const BLOCK=/^(P|DIV|LI|H[1-6]|BR|TR|SECTION|ARTICLE|HEADER|FOOTER|UL|OL|TABLE|BLOCKQUOTE|PRE|DT|DD|FIGCAPTION)$/;
+  const BLOCK=/^(P|DIV|LI|H[1-6]|BR|TR|TD|TH|SECTION|ARTICLE|HEADER|FOOTER|UL|OL|TABLE|BLOCKQUOTE|PRE|DT|DD|FIGCAPTION)$/;
   let out='';
   (function walk(n){
     for(const c of n.childNodes){
@@ -246,8 +306,8 @@ async function nextImport(){
     const {fields,image}=await parseFile(f);
     busy(false);
     openEdit('');ed.fromImport=true;
-    for(const k of ['title','from','category','servings','time','ingredients','steps','notes'])if(fields[k])$('#f-'+k).value=fields[k];
-    catSug();
+    for(const k of ['title','from','servings','time','ingredients','steps','notes'])if(fields[k])$('#f-'+k).value=fields[k];
+    tagAdd('categories',(fields.categories||[]).join(','));tagAdd('cuisines',(fields.cuisines||[]).join(','));
     if(image&&confirm('Use this picture as the recipe photo?')){
       try{const b=await shrink(image);if(ed){ed.blob=b;ed.blobUrl=URL.createObjectURL(b);showPhoto()}}catch{}
     }

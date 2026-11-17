@@ -1,7 +1,7 @@
 // Family Cookbook — one shared cookbook per link (#<token>); everyone with the link can view and edit.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261116b';
+const APPV='20261116c';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -9,6 +9,11 @@ const API=(()=>{const u=new URLSearchParams(location.search).get('api');
   else if(u&&/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(u))localStorage.setItem('fc-api',u);
   const s=localStorage.getItem('fc-api');return s&&/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(s)?s:DEFAULT_API})();
 const CATS=['Breakfast','Appetizer','Soup','Salad','Main','Side','Dessert','Baking','Drinks','Other'];
+const CUISINES=['American','Italian','Mexican','Chinese','Indian','French','Jewish','Mediterranean','Greek','Japanese','Thai','Middle Eastern'];
+// categories/cuisines are lists (v20261116c); recipes saved earlier may only carry a single `category` string
+const catsOf=r=>Array.isArray(r.categories)?r.categories:(r.category?[r.category]:[]);
+const cuisOf=r=>Array.isArray(r.cuisines)?r.cuisines:[];
+const TAGS={categories:{of:catsOf,sug:CATS},cuisines:{of:cuisOf,sug:CUISINES}};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const linkify=s=>esc(s).replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
@@ -33,7 +38,7 @@ async function api(method,path,body,raw){
 
 // ---------- state ----------
 let tok='',book={name:'',recipes:[]};
-const st={q:'',sort:localStorage.getItem('fc-sort')||'added',cat:'',from:'',sel:null};  // sel = Set of ids in Select mode
+const st={q:'',sort:localStorage.getItem('fc-sort')||'added',cat:'',cui:'',from:'',sel:null};  // sel = Set of ids in Select mode
 let cur=null;      // recipe id open in the view
 let ed=null;       // edit state {id, updated, photo, blob, blobUrl}
 const byId=id=>book.recipes.find(r=>r.id===id);
@@ -52,31 +57,33 @@ const fromTxt=r=>r.from?'From '+r.from:'';
 // ---------- search / sort / filter ----------
 function matches(r,qw){
   if(!qw.length)return true;
-  const ws=words([r.title,r.ingredients,r.from,r.category,r.notes].join(' '));
+  const ws=words([r.title,r.ingredients,r.from,...catsOf(r),...cuisOf(r),r.notes].join(' '));
   return qw.every(q=>ws.some(w=>w.startsWith(q)));
 }
 const cmpTxt=(a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true});
 function sorted(list){
-  const t=(a,b)=>cmpTxt(a.title,b.title),blankLast=k=>(a,b)=>(!a[k])-(!b[k])||cmpTxt(a[k]||'',b[k]||'')||t(a,b);
-  const f={added:(a,b)=>(b.added||0)-(a.added||0)||t(a,b),title:t,category:blankLast('category'),from:blankLast('from')}[st.sort]||t;
+  const t=(a,b)=>cmpTxt(a.title,b.title),blankLast=g=>(a,b)=>{const x=g(a),y=g(b);return (!x)-(!y)||cmpTxt(x||'',y||'')||t(a,b)};
+  const first=of=>r=>[...of(r)].sort(cmpTxt)[0]||'';   // sort by the alphabetically-first value
+  const f={added:(a,b)=>(b.added||0)-(a.added||0)||t(a,b),title:t,category:blankLast(first(catsOf)),cuisine:blankLast(first(cuisOf)),from:blankLast(r=>r.from)}[st.sort]||t;
   return [...list].sort(f);
 }
 function visible(){
   const qw=words(st.q);
-  return sorted(book.recipes.filter(r=>matches(r,qw)&&(!st.cat||(r.category||'')===st.cat)&&(!st.from||(r.from||'')===st.from)));
+  return sorted(book.recipes.filter(r=>matches(r,qw)&&(!st.cat||catsOf(r).includes(st.cat))&&(!st.cui||cuisOf(r).includes(st.cui))&&(!st.from||(r.from||'')===st.from)));
 }
 const uniq=k=>[...new Set(book.recipes.map(r=>(r[k]||'').trim()).filter(Boolean))].sort(cmpTxt);
+const uniqL=of=>[...new Set(book.recipes.flatMap(r=>of(r).map(x=>String(x).trim())).filter(Boolean))].sort(cmpTxt);
 
 // ---------- list ----------
 function fillFilters(){
-  const cats=uniq('category'),froms=uniq('from');
+  const cats=uniqL(catsOf),cuis=uniqL(cuisOf),froms=uniq('from');
   if(st.cat&&!cats.includes(st.cat))st.cat='';
+  if(st.cui&&!cuis.includes(st.cui))st.cui='';
   if(st.from&&!froms.includes(st.from))st.from='';
-  $('#fcat').innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option${c===st.cat?' selected':''}>${esc(c)}</option>`).join('');
-  $('#ffrom').innerHTML='<option value="">From anyone</option>'+froms.map(c=>`<option${c===st.from?' selected':''}>${esc(c)}</option>`).join('');
-  $('#fcat').classList.toggle('on',!!st.cat);$('#ffrom').classList.toggle('on',!!st.from);
+  const opts=(all,list,v)=>`<option value="">${all}</option>`+list.map(c=>`<option${c===v?' selected':''}>${esc(c)}</option>`).join('');
+  $('#fcat').innerHTML=opts('Category',cats,st.cat);$('#fcui').innerHTML=opts('Cuisine',cuis,st.cui);$('#ffrom').innerHTML=opts('From',froms,st.from);
+  $('#fcat').classList.toggle('on',!!st.cat);$('#fcui').classList.toggle('on',!!st.cui);$('#ffrom').classList.toggle('on',!!st.from);
   $('#sort').value=st.sort;
-  $('#cats').innerHTML=[...new Set([...CATS,...cats])].map(c=>`<option value="${esc(c)}">`).join('');
   $('#froms').innerHTML=froms.map(c=>`<option value="${esc(c)}">`).join('');
 }
 function cardHtml(r){
@@ -84,13 +91,13 @@ function cardHtml(r){
   const sel=st.sel&&st.sel.has(r.id);
   return `<button class="card${sel?' sel':''}" data-id="${esc(r.id)}">${st.sel?'<span class="tick">✓</span>':''}${th}<div class="cb"><div class="ct">${esc(r.title)}</div>`+
     (r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:'')+
-    ((r.category||r.time)?`<div class="meta">${r.category?`<span class="pill c">${esc(r.category)}</span>`:''}${r.time?`<span class="pill">${esc(r.time)}</span>`:''}</div>`:'')+`</div></button>`;
+    ((catsOf(r).length||cuisOf(r).length||r.time)?`<div class="meta">${catsOf(r).map(c=>`<span class="pill c">${esc(c)}</span>`).join('')}${cuisOf(r).map(c=>`<span class="pill u">${esc(c)}</span>`).join('')}${r.time?`<span class="pill">${esc(r.time)}</span>`:''}</div>`:'')+`</div></button>`;
 }
 function render(){
   $('#bname').textContent=book.name||'Family Cookbook';
   document.title=book.name||'Family Cookbook';
   fillFilters();
-  const v=visible(),n=book.recipes.length,filt=st.q||st.cat||st.from;
+  const v=visible(),n=book.recipes.length,filt=st.q||st.cat||st.cui||st.from;
   $('#count').textContent=filt?`${v.length} of ${n} recipe${n===1?'':'s'}`:`${n} recipe${n===1?'':'s'}`;
   $('#prall').hidden=!v.length||!!st.sel;$('#selbtn').hidden=!n||!!st.sel;
   $('#list').innerHTML=v.length?v.map(cardHtml).join(''):`<div class="empty">${n?'No matches':'No recipes yet'}</div>`;
@@ -115,11 +122,12 @@ function openView(id,pushIt=true){
   if(pushIt)push('view');
 }
 function recipeHtml(r,pr){
-  const facts=[r.category&&['Category',r.category],r.time&&['Time',r.time],r.servings&&['Serves',r.servings]].filter(Boolean)
+  const cs=catsOf(r).join(', '),us=cuisOf(r).join(', ');
+  const facts=[cs&&[catsOf(r).length>1?'Categories':'Category',cs],us&&['Cuisine',us],r.time&&['Time',r.time],r.servings&&['Serves',r.servings]].filter(Boolean)
     .map(([k,v])=>`<span class="fact"><span>${k}</span>${esc(v)}</span>`).join('');
   const ing=ingHtml(r.ingredients),stp=stepHtml(r.steps);
   if(pr)return `<article class="pr">${r.photo?`<img src="${esc(photoUrl(r.photo))}" alt="">`:''}<h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}`+
-    (facts?`<div class="facts">${[r.category&&'Category: '+r.category,r.time&&'Time: '+r.time,r.servings&&'Serves: '+r.servings].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ')}</div>`:'')+
+    (facts?`<div class="facts">${[cs&&(catsOf(r).length>1?'Categories: ':'Category: ')+cs,us&&'Cuisine: '+us,r.time&&'Time: '+r.time,r.servings&&'Serves: '+r.servings].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ')}</div>`:'')+
     (ing?`<h3>Ingredients</h3><ul>${ing}</ul>`:'')+(stp?`<h3>Steps</h3><ol>${stp}</ol>`:'')+
     (r.notes?`<h3>Notes</h3><div class="notes">${esc(r.notes)}</div>`:'')+`<div class="clear"></div></article>`;
   return (r.photo?`<img class="hero" src="${esc(photoUrl(r.photo))}" alt="">`:'')+`<div class="rv"><h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}`+
@@ -135,22 +143,34 @@ function renderView(){
 }
 
 // ---------- edit ----------
-const FIELDS=['title','from','category','servings','time','ingredients','steps','notes'];
+const FIELDS=['title','from','servings','time','ingredients','steps','notes'];
 function fillForm(r){
   FIELDS.forEach(k=>$('#f-'+k).value=r[k]||'');
+  ed.categories=[...catsOf(r)];ed.cuisines=[...cuisOf(r)];
   if(ed.blobUrl)URL.revokeObjectURL(ed.blobUrl);
   ed.blob=null;ed.blobUrl='';ed.photo=r.photo||'';ed.updated=r.updated;
-  showPhoto();catSug();
+  showPhoto();pickers();
 }
 function showPhoto(){
   const src=ed.blobUrl||photoUrl(ed.photo);
   $('#f-phimg').hidden=!src;if(src)$('#f-phimg').src=src;
   $('#f-phbtn').textContent=src?'Change photo':'Add photo';$('#f-phrm').hidden=!src;
 }
-function catSug(){
-  const v=$('#f-category').value.trim();
-  $('#catsug').innerHTML=CATS.map(c=>`<button type="button" class="${c===v?'on':''}">${esc(c)}</button>`).join('');
+// Toggle pills for categories / cuisines: suggestions + every value already used in the book + the recipe's own.
+function pickers(){
+  for(const [k,T] of Object.entries(TAGS)){
+    const sel=ed[k],lc=new Set(sel.map(x=>x.toLowerCase())),seen=new Set(),all=[];
+    for(const v of [...T.sug,...uniqL(T.of),...sel])if(!seen.has(v.toLowerCase())){seen.add(v.toLowerCase());all.push(v)}
+    $('#pk-'+k+' .pks').innerHTML=all.map(v=>`<button type="button" data-v="${esc(v)}" class="${lc.has(v.toLowerCase())?'on':''}">${esc(v)}</button>`).join('');
+  }
 }
+function tagAdd(k,text){
+  for(let v of String(text||'').split(/[,;\n]/)){v=v.trim().slice(0,60);if(!v)continue;
+    const known=[...TAGS[k].sug,...uniqL(TAGS[k].of)].find(x=>x.toLowerCase()===v.toLowerCase());v=known||v;
+    if(!ed[k].some(x=>x.toLowerCase()===v.toLowerCase())&&ed[k].length<12)ed[k].push(v)}
+  pickers();
+}
+const flushTags=()=>{for(const k of Object.keys(TAGS)){const i=$('#pk-'+k+' input');if(i.value.trim()){tagAdd(k,i.value);i.value=''}}};
 function openEdit(id,pushIt=true){
   const r=id?byId(id):{};
   ed={id:id||'',photo:'',blob:null,blobUrl:''};
@@ -168,7 +188,9 @@ function closeEdit(fromPop,then){
   const f=afterClose;afterClose=null;if(f)f();
   if(typeof importQ!=='undefined'&&importQ.length)setTimeout(nextImport,350);   // next dropped/picked file
 }
-const dirty=()=>{if(!ed)return false;const r=ed.id?byId(ed.id)||{}:{};return !!ed.blob||ed.photo!==(r.photo||'')||FIELDS.some(k=>$('#f-'+k).value.trim()!==(r[k]||'').trim())};
+const dirty=()=>{if(!ed)return false;const r=ed.id?byId(ed.id)||{}:{};
+  return !!ed.blob||ed.photo!==(r.photo||'')||FIELDS.some(k=>$('#f-'+k).value.trim()!==(r[k]||'').trim())
+    ||ed.categories.join('\n')!==catsOf(r).join('\n')||ed.cuisines.join('\n')!==cuisOf(r).join('\n')||Object.keys(TAGS).some(k=>$('#pk-'+k+' input').value.trim())};
 
 // Downscale a picked photo to ≤1200px JPEG under ~590 KB.
 async function shrink(file){
@@ -193,7 +215,9 @@ async function shrink(file){
 let saving=false;
 async function save(){
   if(saving||!ed)return;
+  flushTags();
   const data={};FIELDS.forEach(k=>data[k]=$('#f-'+k).value.trim());
+  data.categories=[...ed.categories];data.cuisines=[...ed.cuisines];
   if(!data.title){msg('Add a title');$('#f-title').focus();return}
   saving=true;['#esave','#esave2'].forEach(s=>{$(s).disabled=true});$('#esave').textContent='Saving…';
   try{
@@ -214,7 +238,7 @@ async function save(){
       const i=book.recipes.findIndex(x=>x.id===r.id);if(i>=0)book.recipes[i]=r;else book.recipes.push(r);
     }else{
       r=await api('POST',`/books/${tok}/recipes`,data);book.recipes.push(r);
-      if(!visible().some(x=>x.id===r.id)){st.q='';$('#q').value='';st.cat=st.from=''}
+      if(!visible().some(x=>x.id===r.id)){st.q='';$('#q').value='';st.cat=st.cui=st.from=''}
     }
     saveCache();render();
     closeEdit(false,ed.id||(ed.fromImport&&importQ.length)?null:()=>openView(r.id));
@@ -273,7 +297,7 @@ function boot(){
     tok='';showStart();return;
   }
   if(!/^[A-Za-z0-9_-]{24,64}$/.test(h)){tok='';showStart();msg('That cookbook link didn’t work',6000);return}
-  if(h!==tok){tok=h;st.q='';st.cat=st.from='';st.sel=null;$('#q').value='';
+  if(h!==tok){tok=h;st.q='';st.cat=st.cui=st.from='';st.sel=null;$('#q').value='';
     try{book=JSON.parse(localStorage.getItem(cacheKey())||'null')||{name:'',recipes:[]}}catch{book={name:'',recipes:[]}}}
   localStorage.setItem('fc-last',tok);
   $('#start').hidden=true;$('#app').hidden=false;render();refresh();
@@ -292,6 +316,7 @@ $('#q').onkeydown=e=>{if(e.key==='Enter')e.target.blur()};
 $('#qx').onclick=()=>{$('#q').value='';st.q='';render()};
 $('#sort').onchange=e=>{st.sort=e.target.value;localStorage.setItem('fc-sort',st.sort);render()};
 $('#fcat').onchange=e=>{st.cat=e.target.value;render()};
+$('#fcui').onchange=e=>{st.cui=e.target.value;render()};
 $('#ffrom').onchange=e=>{st.from=e.target.value;render()};
 $('#list').onclick=e=>{const c=e.target.closest('.card');if(!c)return;const id=c.dataset.id;
   if(st.sel){st.sel.has(id)?st.sel.delete(id):st.sel.add(id);render();return}
@@ -315,8 +340,13 @@ $('#f-photo').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(
   try{const b=await shrink(f);if(!ed)return;if(ed.blobUrl)URL.revokeObjectURL(ed.blobUrl);ed.blob=b;ed.blobUrl=URL.createObjectURL(b)}
   catch{msg('Could not use that photo')}
   showPhoto()};
-$('#f-category').oninput=catSug;
-$('#catsug').onclick=e=>{const b=e.target.closest('button');if(!b)return;const f=$('#f-category');f.value=f.value.trim()===b.textContent?'':b.textContent;catSug()};
+for(const k of Object.keys(TAGS)){
+  const box=$('#pk-'+k),inp=box.querySelector('input');
+  box.querySelector('.pks').onclick=e=>{const b=e.target.closest('button');if(!b||!ed)return;const v=b.dataset.v,i=ed[k].findIndex(x=>x.toLowerCase()===v.toLowerCase());
+    if(i>=0)ed[k].splice(i,1);else if(ed[k].length<12)ed[k].push(v);pickers()};
+  box.querySelector('.pkadd').onclick=()=>{tagAdd(k,inp.value);inp.value='';inp.focus()};
+  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();tagAdd(k,inp.value);inp.value=''}};
+}
 
 // keep everyone's edits flowing in: refresh when the app comes back and every minute while open
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){refresh();checkV()}});

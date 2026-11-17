@@ -45,10 +45,11 @@
   .search input{padding-left:42px}
   .search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:20px;height:20px;color:var(--mute)}
   .search .clr{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:0;background:none;font-size:24px;color:var(--mute)}
-  .fl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .fl{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
   .fl select,.sortsel{width:100%;min-width:0;min-height:44px;text-overflow:ellipsis;padding:8px 30px 8px 12px;border:1.5px solid var(--line);border-radius:12px;font-size:16px;-webkit-appearance:none;appearance:none;
     background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236f6258' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 11px center}
   .sortsel{width:auto!important;flex:0 1 auto;border:0!important;background-color:transparent!important;padding-left:2px!important;padding-right:24px!important;background-position:right 4px center!important;color:var(--grn);font-weight:600}
+  .fl select{padding:8px 24px 8px 10px;background-position:right 8px center}
   .fl select.on{border-color:var(--acc);color:var(--acc);font-weight:600}
   main{padding:10px 16px calc(110px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
   .crow{display:flex;align-items:center;gap:2px;margin:0 0 2px}
@@ -65,6 +66,7 @@
   .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .pill{font-size:14px;padding:3px 10px;border-radius:99px;background:var(--soft);color:var(--ink)}
   .pill.c{background:#f6dccf;color:var(--acc-d)}
+  .pill.u{background:#dfeae2;color:var(--grn)}
   .tick{flex:0 0 30px;width:30px;height:30px;border-radius:50%;border:2px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px}
   .card.sel{border-color:var(--acc);background:#fff4ec}
   .card.sel .tick{background:var(--acc);border-color:var(--acc)}
@@ -125,9 +127,13 @@
   .phbtns{display:flex;flex-direction:column;gap:8px}
   .phbox img{width:110px;height:110px;object-fit:cover;border-radius:12px;background:var(--soft)}
   .phbox .btn{min-height:46px;font-size:16px}
-  .sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-  .sug button{min-height:38px;padding:6px 12px;border-radius:99px;border:1.5px solid var(--line);background:#fff;font-size:15px}
-  .sug button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pks{display:flex;flex-wrap:wrap;gap:6px}
+  .pks button{min-height:40px;padding:6px 13px;border-radius:99px;border:1.5px solid var(--line);background:#fff;font-size:16px}
+  .pks button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pks button.on:before{content:"✓ "}
+  .pkrow{display:flex;gap:8px;margin-top:8px}
+  .pkrow .inp{flex:1;min-width:0;min-height:44px;padding:9px 12px;font-size:16px}
+  .pkrow .btn{min-height:44px;padding:8px 16px;font-size:16px}
   .edb{display:flex;gap:10px;margin-top:26px}
   .edb .btn{flex:1}
 
@@ -186,12 +192,13 @@
     </div>
     <div class="fl">
       <select id="fcat" aria-label="Category"></select>
+      <select id="fcui" aria-label="Cuisine"></select>
       <select id="ffrom" aria-label="From"></select>
     </div>
   </header>
   <main>
     <div class="crow"><select id="sort" class="sortsel" aria-label="Sort">
-        <option value="added">Recently added</option><option value="title">Title A→Z</option><option value="category">Category</option><option value="from">From</option>
+        <option value="added">Recently added</option><option value="title">Title A→Z</option><option value="category">Category</option><option value="cuisine">Cuisine</option><option value="from">From</option>
       </select><span class="sp"></span><button class="lnk" id="selbtn">Select</button><button class="lnk" id="prall">Print all</button></div>
     <div class="count" id="count"></div>
     <div id="list"></div>
@@ -218,10 +225,10 @@
       <label for="f-from">From</label>
       <input class="inp" id="f-from" maxlength="100" placeholder="e.g. Grandma Ruth" list="froms">
       <datalist id="froms"></datalist>
-      <label for="f-category">Category</label>
-      <input class="inp" id="f-category" maxlength="60" list="cats">
-      <datalist id="cats"></datalist>
-      <div class="sug" id="catsug"></div>
+      <label>Category</label>
+      <div class="pk" id="pk-categories"><div class="pks"></div><div class="pkrow"><input class="inp" maxlength="60" placeholder="New category" aria-label="New category" enterkeyhint="done"><button type="button" class="btn pkadd">Add</button></div></div>
+      <label>Cuisine</label>
+      <div class="pk" id="pk-cuisines"><div class="pks"></div><div class="pkrow"><input class="inp" maxlength="60" placeholder="New cuisine" aria-label="New cuisine" enterkeyhint="done"><button type="button" class="btn pkadd">Add</button></div></div>
       <div class="row">
         <div><label for="f-servings">Servings</label><input class="inp" id="f-servings" maxlength="60" placeholder="e.g. 4"></div>
         <div><label for="f-time">Time</label><input class="inp" id="f-time" maxlength="120" placeholder="e.g. 1 hr"></div>
@@ -241,7 +248,7 @@
 <div id="busy" hidden><div><i></i><span id="busyt">Reading…</span></div></div>
 <div id="print"></div>
 <div id="msg" role="status"></div>
-<script src="app.js?v=20261116b"></script>
-<script src="import.js?v=20261116b"></script>
+<script src="app.js?v=20261116c"></script>
+<script src="import.js?v=20261116c"></script>
 </body>
 </html>
