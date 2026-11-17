@@ -24,8 +24,10 @@ function busy(t){const b=$('#busy');if(t===false){b.hidden=true;return}b.hidden=
 const AP="(?:'|’)?";
 const HDRS=[
   ['ing','ingredients?|ingredient\\s*list'],
-  ['stp','instructions?|steps?|directions?|methods?|preparations?'],
+  // v20261117a: "Preparation" is a Steps header like Instructions/Steps/Directions/Method, incl. the two-word forms
+  ['stp','(?:preparation|cooking|baking)\\s*(?:steps?|instructions?|directions?|methods?)|methods?\\s*of\\s*preparation|instructions?|steps?|directions?|methods?|preparations?'],
   ['special','special\\s*instructions?'],          // v20261116f: its own field
+  ['modifications','my\\s*modifications?|modifications?|my\\s*changes|changes|variations?'],   // v20261117a: its own field
   ['notes',`cook${AP}s\\s*notes?|chef${AP}s\\s*notes?|recipe\\s*notes?|notes?|tips?`],
   ['time','(?:prep(?:aration)?|cook(?:ing)?|total|bake|baking|active|inactive|chill(?:ing)?|rest(?:ing)?|ready\\s*in)\\s*times?|times?'],
   ['time2','prep|cook|total|ready\\s*in'],           // short forms: need a colon
@@ -55,11 +57,20 @@ const GLUE='\u2063';
 // In an ingredient line the first such gap after a comma-free name becomes ", " (onion, finely chopped); any other gap a space.
 const unglue=l=>{let first=true;return l.replace(/\u2063/g,(m,i,str)=>{const pre=str.slice(0,i).replace(/\u2063/g,' ');
   const c=first&&!pre.includes(',')&&/[A-Za-z)]$/.test(pre)&&/^[a-z]/.test(str.slice(i+1));first=false;return c?', ':' '})};
+const DUR_RE=/^(?:about\s+|approx\.?\s+|under\s+)?\d+(?:[.,\/]\d+)?(?:\s*[-–]\s*\d+)?\s*(?:min(?:ute)?s?|hrs?|hours?)\b\.?(?:\s*(?:and\s+)?\d+\s*min(?:ute)?s?\b\.?)?$/i;
+// A header word split by the PDF reader ("Prep aration", "Ingre dients") still counts — but only as a bare header
+// (nothing else on the line), so "Notes From Grandma" never becomes a "Notes" header.
 function header(line,joined){
+  const h=header1(line,joined);
+  if(h||joined||line.length>30||!/\s/.test(line.trim()))return h;
+  const j=header1(line.replace(/\s+/g,''),true);
+  return j&&!j.rest?j:null;
+}
+function header1(line,joined){
   let s=line.replace(/\*\*|__/g,'').replace(/^[\s#>*_]+/,'').trim();
   let best=null;
   for(const [kind,re] of HDRS){const m=s.match(re);if(m&&(!best||m[1].length>best.word.length))best={kind,word:m[1]}}
-  if(!best)return joined?null:(line.length<=30&&/\s/.test(line.trim())?header(line.replace(/\s+/g,''),true):null);
+  if(!best)return joined?null:(line.length<=30&&/\s/.test(line.trim())?header1(line.replace(/\s+/g,''),true):null);
   let rest=s.slice(best.word.length);
   if(/^[a-z]/.test(rest))return null;                    // "Notebook", "Stepsister", "Ingredientsflour"
   const glued=/^[A-Z]/.test(rest);                        // "IngredientsFor the crust:" (merged by the reader)
@@ -68,12 +79,13 @@ function header(line,joined){
   rest=(sep?rest.slice(sep[0].length):rest).replace(/^[\s*_]+|[\s*_]+$/g,'');
   let kind=best.kind;
   if(kind==='time2'){if(!sep)return null;kind='time'}
+  if(kind==='stp'&&/^preparations?$/i.test(best.word)&&DUR_RE.test(rest))kind='time';   // "Preparation: 20 minutes" is a time
   if(rest&&!sep){
     const caps=best.word===best.word.toUpperCase()&&/[A-Z]{3}/.test(best.word);
     let ok=false;
     if(kind==='servings')ok=/^(?:about\s+|approx\.?\s+|up to\s+)?[\d½¼¾⅓⅔]|^(?:one|two|three|four|five|six|eight|ten|twelve|a dozen|about)\b/i.test(rest);
     else if(kind==='time')ok=!/^times?$/i.test(best.word)&&/^(?:about\s+|approx\.?\s+|under\s+)?\d/i.test(rest);
-    else if(kind==='ing'||kind==='stp'||kind==='notes'||kind==='special'){
+    else if(kind==='ing'||kind==='stp'||kind==='notes'||kind==='special'||kind==='modifications'){
       if(/^steps?$/i.test(best.word)&&/^\d/.test(rest))return null;   // "Step 1 …" is a step, not a header
       ok=caps||glued||/^[\d½¼¾⅓⅔⅛•·*(–-]/.test(rest)||(rest.endsWith(':')&&rest.length<=40);
     }
@@ -102,8 +114,8 @@ function joinWrapped(lines){
 
 function parseText(text,fallbackTitle=''){
   const raw=String(text||'').replace(/\r\n?/g,'\n').replace(/[   ]/g,' ').replace(/[​﻿]/g,'');
-  const r={title:'',ingredients:'',steps:'',special:'',servings:'',time:'',notes:'',from:'',categories:[],cuisines:[]};
-  const sec={pre:[],ing:[],stp:[],special:[],notes:[],skip:[]},times=[];
+  const r={title:'',ingredients:'',steps:'',special:'',modifications:'',servings:'',time:'',notes:'',from:'',categories:[],cuisines:[]};
+  const sec={pre:[],ing:[],stp:[],special:[],modifications:[],notes:[],skip:[]},times=[];
   let main='pre',meta=null,sawMain=false;
   const apply=(kind,word,val)=>{
     for(const part of String(val).split(META_IN)){       // "20 minutes Cook Time: 3 hours"
@@ -156,13 +168,14 @@ function parseText(text,fallbackTitle=''){
   const tidy=a=>a.join('\n').replace(/\n{3,}/g,'\n\n').trim();
   r.notes=[tidy(intro),tidy(sec.notes)].filter(Boolean).join('\n\n');
   r.special=tidy(sec.special);
+  r.modifications=tidy(sec.modifications);
   r.time=[...new Set(times)].join(', ').slice(0,120);
   r.servings=r.servings.slice(0,60);r.from=r.from.slice(0,100);
   r.categories=normTags(r.categories,CATS);r.cuisines=normTags(r.cuisines,CUISINES);
   if(!r.title)r.title=fallbackTitle;
   r.title=r.title.slice(0,200);
   r.ok=!!(r.ingredients||r.steps);
-  if(!r.ok){r.notes=raw.replace(/\u2063/g,' ').replace(/\n{3,}/g,'\n\n').trim();r.ingredients=r.steps=r.special=''}
+  if(!r.ok){r.notes=raw.replace(/\u2063/g,' ').replace(/\n{3,}/g,'\n\n').trim();r.ingredients=r.steps=r.special=r.modifications=''}
   return r;
 }
 
@@ -433,7 +446,7 @@ async function parseFile(f){
 }
 
 // Open the Add form prefilled (never saved until Save). Values are cut to the form/server limits.
-const IMP_MAX={title:200,from:100,servings:60,time:120,ingredients:12000,steps:24000,special:4000,notes:12000};
+const IMP_MAX={title:200,from:100,servings:60,time:120,ingredients:12000,steps:24000,special:4000,modifications:4000,notes:12000};
 function fillImported(fields){
   openEdit('');ed.fromImport=true;
   for(const [k,n] of Object.entries(IMP_MAX))if(fields[k])$('#f-'+k).value=String(fields[k]).slice(0,n);
@@ -464,7 +477,7 @@ async function importUrl(raw){
     busy(false);
     const src='Source: '+page;   // no separate link field → the page goes at the end of Notes (kept within the limit)
     fields.notes=[fields.ok?String(fields.notes||'').slice(0,Math.max(0,IMP_MAX.notes-src.length-2)).trim():'',src].filter(Boolean).join('\n\n');
-    if(!fields.ok){fields.ingredients=fields.steps=fields.special=''}
+    if(!fields.ok){fields.ingredients=fields.steps=fields.special=fields.modifications=''}
     if(!fields.title)fields.title=host;
     fillImported(fields);
     if(blob&&ed){ed.blob=blob;ed.blobUrl=URL.createObjectURL(blob);showPhoto()}

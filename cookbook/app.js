@@ -1,7 +1,7 @@
 // Family Cookbook — one shared cookbook per link (#<token>); everyone with the link can view and edit.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261116i';
+const APPV='20261117a';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -59,7 +59,7 @@ const AB_KEY='fc-addedby';   // last “Added by” typed on this device
 // ---------- search / sort / filter ----------
 function matches(r,qw){
   if(!qw.length)return true;
-  const ws=words([r.title,r.ingredients,r.from,r.addedBy,...catsOf(r),...cuisOf(r),r.special,r.notes].join(' '));
+  const ws=words([r.title,r.ingredients,r.from,r.addedBy,...catsOf(r),...cuisOf(r),r.special,r.modifications,r.notes].join(' '));
   return qw.every(q=>ws.some(w=>w.startsWith(q)));
 }
 const cmpTxt=(a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true});
@@ -136,11 +136,13 @@ function recipeHtml(r,pr){
     (facts?`<div class="facts">${[cs&&(catsOf(r).length>1?'Categories: ':'Category: ')+cs,us&&'Cuisine: '+us,r.time&&'Time: '+r.time,r.servings&&'Serves: '+r.servings].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ')}</div>`:'')+
     (ing?`<h3>Ingredients</h3><ul>${ing}</ul>`:'')+(stp?`<h3>Steps</h3><ol>${stp}</ol>`:'')+
     (r.special?`<h3>Special instructions</h3><div class="notes special">${esc(r.special)}</div>`:'')+
+    (r.modifications?`<h3>Modifications</h3><div class="notes mods">${esc(r.modifications)}</div>`:'')+
     (r.notes?`<h3>Notes</h3><div class="notes">${esc(r.notes)}</div>`:'')+`<div class="clear"></div></article>`;
   return (r.photo?`<img class="hero" src="${esc(photoUrl(r.photo))}" alt="">`:'')+`<div class="rv"><h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}${r.addedBy?`<div class="ab">${esc(byTxt(r))}</div>`:''}`+
     (facts?`<div class="facts">${facts}</div>`:'')+
     (ing?`<h3>Ingredients</h3><ul class="ing">${ing}</ul>`:'')+(stp?`<h3>Steps</h3><ol class="stp">${stp}</ol>`:'')+
     (r.special?`<h3>Special instructions</h3><div class="notes special">${linkify(r.special)}</div>`:'')+
+    (r.modifications?`<h3>Modifications</h3><div class="notes mods">${linkify(r.modifications)}</div>`:'')+
     (r.notes?`<h3>Notes</h3><div class="notes">${linkify(r.notes)}</div>`:'')+
     `<div class="vact"><button class="btn" id="vprint">Print</button><button class="btn pri" id="vedit2">Edit</button></div></div>`;
 }
@@ -151,7 +153,7 @@ function renderView(){
 }
 
 // ---------- edit ----------
-const FIELDS=['title','from','addedBy','servings','time','ingredients','steps','special','notes'];
+const FIELDS=['title','from','addedBy','servings','time','ingredients','steps','special','modifications','notes'];
 function fillForm(r){
   FIELDS.forEach(k=>$('#f-'+k).value=r[k]||'');
   ed.categories=[...catsOf(r)];ed.cuisines=[...cuisOf(r)];
