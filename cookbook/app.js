@@ -1,7 +1,7 @@
 // Family Cookbook — one shared cookbook per link (#<token>); everyone with the link can view and edit.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261116a';
+const APPV='20261116b';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -95,7 +95,7 @@ function render(){
   $('#prall').hidden=!v.length||!!st.sel;$('#selbtn').hidden=!n||!!st.sel;
   $('#list').innerHTML=v.length?v.map(cardHtml).join(''):`<div class="empty">${n?'No matches':'No recipes yet'}</div>`;
   $('#qx').hidden=!st.q;
-  $('#add').hidden=!!st.sel;$('#selbar').hidden=!st.sel;
+  $('#fabs').hidden=!!st.sel;$('#selbar').hidden=!st.sel;
   if(st.sel){const k=st.sel.size;$('#seln').textContent=k?`${k} selected`:'Tap recipes';$('#prsel').disabled=!k}
 }
 
@@ -166,6 +166,7 @@ function closeEdit(fromPop,then){
   $('#edit').hidden=true;if(ed&&ed.blobUrl)URL.revokeObjectURL(ed.blobUrl);ed=null;modal();
   if(cur)renderView();
   const f=afterClose;afterClose=null;if(f)f();
+  if(typeof importQ!=='undefined'&&importQ.length)setTimeout(nextImport,350);   // next dropped/picked file
 }
 const dirty=()=>{if(!ed)return false;const r=ed.id?byId(ed.id)||{}:{};return !!ed.blob||ed.photo!==(r.photo||'')||FIELDS.some(k=>$('#f-'+k).value.trim()!==(r[k]||'').trim())};
 
@@ -216,7 +217,7 @@ async function save(){
       if(!visible().some(x=>x.id===r.id)){st.q='';$('#q').value='';st.cat=st.from=''}
     }
     saveCache();render();
-    closeEdit(false,ed.id?null:()=>openView(r.id));
+    closeEdit(false,ed.id||(ed.fromImport&&importQ.length)?null:()=>openView(r.id));
     msg('Saved',2000);
   }catch(e){msg(e.message||'Could not save')}
   finally{saving=false;['#esave','#esave2'].forEach(s=>{$(s).disabled=false});$('#esave').textContent='Save'}

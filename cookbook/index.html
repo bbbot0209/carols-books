@@ -69,7 +69,16 @@
   .card.sel{border-color:var(--acc);background:#fff4ec}
   .card.sel .tick{background:var(--acc);border-color:var(--acc)}
   .empty{text-align:center;color:var(--mute);padding:50px 10px;font-size:18px}
-  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:6;min-height:58px;padding:0 24px 0 20px;border-radius:99px;border:0;background:var(--acc);color:#fff;font-size:19px;font-weight:700;box-shadow:0 6px 18px rgba(120,50,20,.3)}
+  .fabs{position:fixed;right:16px;left:16px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:6;display:flex;justify-content:flex-end;gap:10px;pointer-events:none}
+  .fabs button{pointer-events:auto}
+  .fab{min-height:58px;padding:0 24px 0 20px;border-radius:99px;border:0;background:var(--acc);color:#fff;font-size:19px;font-weight:700;box-shadow:0 6px 18px rgba(120,50,20,.3);white-space:nowrap}
+  .fab2{min-height:58px;padding:0 20px;border-radius:99px;border:1.5px solid var(--acc);background:var(--card);color:var(--acc);font-size:19px;font-weight:700;box-shadow:0 6px 18px rgba(120,50,20,.18);white-space:nowrap}
+  #drop{position:fixed;inset:0;z-index:40;background:rgba(169,74,42,.14);display:flex;align-items:center;justify-content:center;padding:24px;pointer-events:none}
+  #drop div{border:3px dashed var(--acc);border-radius:24px;background:rgba(255,252,246,.95);padding:40px 48px;font:600 26px Georgia,serif;color:var(--acc)}
+  #busy{position:fixed;inset:0;z-index:45;background:rgba(42,33,27,.35);display:flex;align-items:center;justify-content:center;padding:24px}
+  #busy div{background:var(--card);border-radius:18px;padding:22px 26px;font-size:18px;display:flex;align-items:center;gap:14px;max-width:90vw;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+  #busy i{flex:0 0 26px;width:26px;height:26px;border-radius:50%;border:3px solid var(--soft);border-top-color:var(--acc);animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
   .fab b{font-size:28px;line-height:0;vertical-align:-3px;margin-right:4px;font-weight:400}
   .selbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
   .selbar .n{flex:1;font-size:17px}
@@ -187,7 +196,8 @@
     <div class="count" id="count"></div>
     <div id="list"></div>
   </main>
-  <button class="fab" id="add"><b>+</b> Add recipe</button>
+  <div class="fabs" id="fabs"><button class="fab2" id="imp">Import</button><button class="fab" id="add"><b>+</b> Add recipe</button></div>
+  <input type="file" id="impf" hidden multiple accept=".txt,.md,.markdown,.rtf,.docx,.pdf,.html,.htm,.json,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,text/plain,text/markdown,text/html,application/pdf,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*">
   <div class="selbar" id="selbar" hidden><span class="n" id="seln"></span><button class="pri" id="prsel">Print selected</button><button id="seldone">Done</button></div>
 </div>
 
@@ -227,8 +237,11 @@
   </div>
 </section>
 
+<div id="drop" hidden><div>Drop to import</div></div>
+<div id="busy" hidden><div><i></i><span id="busyt">Reading…</span></div></div>
 <div id="print"></div>
 <div id="msg" role="status"></div>
-<script src="app.js?v=20261116a"></script>
+<script src="app.js?v=20261116b"></script>
+<script src="import.js?v=20261116b"></script>
 </body>
 </html>
