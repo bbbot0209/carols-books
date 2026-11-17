@@ -35,7 +35,7 @@ const HDRS=[
   ['category','categor(?:y|ies)|course'],
   ['cuisine','cuisines?'],
   ['from',`from|source|recipe\\s*from|submitted\\s*by|courtesy\\s*of|author`],
-  ['skip','nutrition(?:\\s*(?:facts|information|info))?|qr\\s*code'],   // printed-page extras: content dropped until the next header
+  ['skip','nutrition(?:\\s*(?:facts|information|info))?|qr\\s*code|private\\s*notes?'],   // printed-page extras: content dropped until the next header
 ].map(([k,src])=>[k,new RegExp('^('+src+')','i')]);
 const META=new Set(['time','servings','category','cuisine','from']);
 const BULLET_RE=/^\s*(?:[-–—•*·▪▢□☐◦‣○●]|\[\s?\])\s*/;
@@ -51,7 +51,7 @@ const capWord=w=>w[0].toUpperCase()+w.slice(1).toLowerCase();
 const META_IN=/\s+(?=(?:(?:prep(?:aration)?|cook(?:ing)?|total|bake|baking|active|inactive|chill(?:ing)?|rest(?:ing)?)\s*time\b|(?:serves|servings?|yields?|makes|cuisines?|categor(?:y|ies)|course|source|from|author|prep|cook|total)\s*[:：]))/i;
 
 // Whole lines that are web/print boilerplate, never recipe content (ratings, shop ads, QR / print / pin prompts).
-const DROP_RE=/^(?:\d(?:\.\d+)?\s+(?:from|stars? from)\s+[\d,]+\s+(?:votes?|ratings?|reviews?)$|(?:visit our shop|scan (?:this|the) qr code|did you make this recipe|tried this recipe|pin (?:this )?recipe|print (?:this )?recipe|rate this recipe|jump to recipe)\b)/i;
+const DROP_RE=/^(?:\d(?:\.\d+)?\s+(?:from|stars? from)\s+[\d,]+\s+(?:votes?|ratings?|reviews?)$|(?:visit our shop|scan (?:this|the) qr code|did you make this recipe|tried this recipe|pin (?:this )?recipe|print (?:this )?recipe|rate this recipe|jump to (?:recipe|video|comments?|instructions|ingredients|nutrition)|watch (?:the |this )?(?:recipe )?video|leave a (?:private )?(?:comment|note|review))\b|ratings?\s*:?\s*\(?[\d.,]+\)?(?:\s*(?:ratings?|reviews?|votes?|stars?))?$|(?:last\s+)?(?:updated|published|posted)(?:\s+on)?\s*:?\s+(?:[a-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})$)/i;
 // The PDF reader marks a positional gap between two text runs that has no space character (WPRM "onion|finely chopped").
 const GLUE='\u2063';
 // In an ingredient line the first such gap after a comma-free name becomes ", " (onion, finely chopped); any other gap a space.
@@ -138,8 +138,12 @@ function parseText(text,fallbackTitle=''){
     const segs=rawLine.trim().split(/\s*[|•·\t]\s*|\s{3,}/).map(x=>x.trim()).filter(Boolean);
     if(segs.length>1){const h0=header(segs[0]);
       if(h0&&META.has(h0.kind)&&h0.kind!=='category'&&h0.kind!=='cuisine'){const extra=[];
-        for(const sg of segs){const h=header(sg);if(h&&META.has(h.kind)){if(h.rest)apply(h.kind,h.word,h.rest)}else extra.push(sg)}
+        for(let k=0;k<segs.length;k++){const sg=segs[k],h=header(sg);
+          if(h&&META.has(h.kind)){if(h.rest)apply(h.kind,h.word,h.rest);else if(k+1<segs.length&&!header(segs[k+1]))apply(h.kind,h.word,segs[++k])}   // "Total Time   45 minutes"
+          else if(!DROP_RE.test(sg))extra.push(sg)}
         if(extra.length)sec[main].push(extra.join(' '));meta=null;continue}}
+    const by=main==='pre'&&!r.from&&l.match(/^[Bb][Yy]\s+(\p{Lu}[\p{L}.'’-]*(?:\s+\p{Lu}[\p{L}.'’-]*){0,3})$/u);   // "By Melissa Clark" byline
+    if(by){r.from=by[1];meta=null;continue}
     const h=header(l);
     if(h){
       if(META.has(h.kind)){meta=null;if(h.rest)apply(h.kind,h.word,h.rest);else meta={kind:h.kind,word:h.word,n:0};continue}
@@ -262,6 +266,7 @@ async function ocr(img,label){
 // and merge prose lines that visibly wrap at the right margin.
 const FOOT_RE=/^(?:\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}(?:\s*[AP]M)?\b|(?:https?:\/\/|www\.)\S+(?:\s+\d+\s*\/\s*\d+)?$|(?:page\s*)?\d+\s*(?:\/|of)\s*\d+$)/i;
 const MARK_RE=/^(?:[-–—•*·▪▢□☐◦‣○●]\s|\d{1,2}\s*[.)]\s|[\u0000�]+\s*[.)]?\s*)/;
+const normRun=t=>t.replace(/[ \t]+/g,' ').replace(/^[\s\u2063]+|[\s\u2063]+$/g,'');
 function pdfRows(items){
   const its=[];
   for(const it of items){
@@ -291,14 +296,15 @@ function pdfRows(items){
         else if(gap<-0.5*em&&cur.t.endsWith(it.s))continue;       // overprinted (fake-bold) duplicate
         else{
           const sep=space||/\s$/.test(cur.t)||/^\s/.test(it.s)?' ':gap>0.2*em?(real?GLUE:' '):'';
+          if(gap>=em)cur.cuts.push({x:it.x,px1:cur.x1,at:cur.t.length+sep.length});   // a visible gap inside the run: a narrow gutter can be split here
           cur.t+=sep+it.s;cur.x1=Math.max(cur.x1,x1);cur.size=Math.max(cur.size,it.size);
         }
       }
-      if(!cur)cur={x0:it.x,x1,t:it.s,size:it.size};
+      if(!cur)cur={x0:it.x,x1,t:it.s,size:it.size,cuts:[]};
       space=false;
     }
     if(cur)segs.push(cur);
-    for(const sg of segs)sg.t=sg.t.replace(/[ \t]+/g,' ').trim();
+    for(const sg of segs){sg.raw=sg.t;sg.t=normRun(sg.t)}
     const ss=segs.filter(sg=>sg.t);
     if(ss.length)out.push({y:r.y,size:size||r.size,segs:ss,x0:ss[0].x0,x1:ss[ss.length-1].x1});
   }
@@ -337,6 +343,98 @@ function pdfColumns(rows){
     if(right.length){const cr=colR(right);right.forEach(r=>r.colR=cr)}
     if(left.length&&right.length)right[0].gapBefore=true;
     out.push(...left,...right);i=reg.j;
+  }
+  return out;
+}
+// v20261117b: header-anchored columns. A bare section header (Ingredients / Preparation / Notes …) that starts well
+// right of the page's left edge marks a column: everything from that row down is split at the header x positions —
+// columns may start on different baselines, a narrow gutter that pdf.js merged into one run is split at the item gap,
+// and a block that runs off the bottom of a page continues at the top of the next one (left column of both pages,
+// then right column of both). The block ends at a run that spans the gutter (a full-width line) or a big vertical gap.
+const SECT=new Set(['ing','stp','special','modifications','notes']);
+const bareSect=t=>{if(t.length>40)return false;const h=header(t);return !!(h&&SECT.has(h.kind)&&!h.rest)};
+function cutSeg(sg,x,tol){   // split a merged run at the first item gap at/after x
+  for(const c of sg.cuts||[]){
+    if(c.x<x-tol)continue;
+    const a=normRun(sg.raw.slice(0,c.at)),b=normRun(sg.raw.slice(c.at));
+    if(!a||!b)return null;
+    return [{x0:sg.x0,x1:c.px1,t:a,raw:sg.raw.slice(0,c.at),size:sg.size,cuts:sg.cuts.filter(d=>d.at<c.at)},
+            {x0:c.x,x1:sg.x1,t:b,raw:sg.raw.slice(c.at),size:sg.size,cuts:sg.cuts.filter(d=>d.at>c.at).map(d=>({...d,at:d.at-c.at}))}];
+  }
+  return null;
+}
+// one row → its runs per column, or null when a run spans a column boundary / sits left of its column
+function colSplit(r,cx,min){
+  const em=r.size,tol=1.5*em,parts=cx.map(()=>[]),q=[...r.segs];
+  while(q.length){
+    const sg=q.shift();let k=0;
+    for(let j=1;j<cx.length;j++)if(sg.x0>=cx[j]-tol)k=j;
+    if(k+1<cx.length&&sg.x1>cx[k+1]-0.5*em){const sp=cutSeg(sg,cx[k+1],tol);if(!sp)return null;q.unshift(...sp);continue}
+    if(min&&sg.x0<min[k]-tol)return null;
+    parts[k].push(sg);
+  }
+  return parts;
+}
+// rows[start..] that fit the columns → {parts:[per-row column parts], n:rows used, end:'page'|'cross'|'gap'}
+function colBlock(rows,start,cx,min){
+  const parts=[];let j=start,end='page';
+  for(;j<rows.length;j++){
+    const r=rows[j];
+    if(j>start&&rows[j-1].y-r.y>4.5*Math.max(r.size,rows[j-1].size)){end='gap';break}
+    const p=colSplit(r,cx,min);if(!p){end='cross';break}
+    parts.push(p);
+  }
+  // a lone header (Notes, Nutrition …) right above a full-width section belongs to that section, not to a column
+  if(end!=='page')while(parts.length){const p=parts[parts.length-1],sg=p.flat();
+    if(sg.length===1&&segText(sg[0]).length<=40&&(h=>h&&!h.rest)(header(segText(sg[0])))){parts.pop();j--}else break}
+  return{parts,n:j-start,end};
+}
+const colRow=(r,segs)=>({...r,segs,x0:segs[0].x0,x1:segs[segs.length-1].x1});
+function addBlock(reg,rows,start,parts){
+  parts.forEach((p,k)=>p.forEach((segs,c)=>{if(segs.length)reg.cols[c].push(colRow(rows[start+k],segs))}));
+}
+// one page's rows → [row | {cols}] in reading order; `cont` = a column block left open at the bottom of the previous page
+function pdfLayout(rows,cont){
+  const out=[];let i=0;
+  if(cont){
+    const b=colBlock(rows,0,cont.cx,cont.min);
+    addBlock(cont,rows,0,b.parts);i=b.n;
+    if(b.end==='page')return{out,open:cont};
+  }
+  const rest=rows.slice(i);
+  const left=Math.min(...rest.map(r=>r.x0));
+  // candidate column headers: bare section headers (also inside a merged run) well right of the left edge
+  const cands=[];
+  rest.forEach((r,k)=>{for(const sg of r.segs){
+    const em=sg.size||r.size;
+    if(sg.x0>left+6*em&&bareSect(segText(sg)))cands.push({k,x:sg.x0,em});
+    for(const c of sg.cuts||[])if(c.x>left+6*em&&bareSect(normRun(sg.raw.slice(c.at)).replace(/⁣/g,' ')))cands.push({k,x:c.x,em});
+  }});
+  for(const a of cands){
+    const cx=[-Infinity];
+    for(const c of cands.filter(c=>c.k>=a.k).sort((p,q)=>p.x-q.x))if(c.x-cx[cx.length-1]>4*c.em)cx.push(c.x);
+    const b=colBlock(rest,a.k,cx,null);
+    const reg={cols:cx.map(()=>[]),cx};
+    addBlock(reg,rest,a.k,b.parts);
+    // a real column layout: every column has ≥2 rows, and the right ones have ≥2 rows starting at the header x
+    const ok=reg.cols.every((c,k)=>c.length>=2&&(k===0||c.filter(r=>r.segs.some(sg=>Math.abs(sg.x0-cx[k])<=2*r.size)).length>=2));
+    if(!ok)continue;
+    reg.min=reg.cols.map(c=>Math.min(...c.map(r=>r.x0)));
+    out.push(...pdfColumns(rest.slice(0,a.k)),reg);
+    if(b.end==='page')return{out,open:reg};
+    const sub=pdfLayout(rest.slice(a.k+b.n),null);
+    return{out:out.concat(sub.out),open:sub.open};
+  }
+  out.push(...pdfColumns(rest));
+  return{out,open:null};
+}
+// [row | {cols}] → rows, columns one after the other
+function flatCols(seq){
+  const out=[];
+  for(const x of seq){
+    if(!x.cols){out.push(x);continue}
+    x.cols.filter(c=>c.length).forEach((c,k)=>{const cr=Math.max(...c.map(r=>r.x1));
+      c.forEach((r,j)=>{r.colR=cr;r.gapBefore=k>0&&j===0;out.push(r)})});
   }
   return out;
 }
@@ -402,7 +500,15 @@ function pdfText(pages){
   const inMargin=(r,h)=>r.y>h*0.92||r.y<h*0.08,key=r=>r.segs.map(segText).join(' ').replace(/\d+/g,'#');
   const seen={};
   for(const p of pages)if(p.rows)for(const k of new Set(p.rows.filter(r=>inMargin(r,p.h)).map(key)))seen[k]=(seen[k]||0)+1;
-  return pages.map(p=>p.rows?pdfLines(pdfColumns(p.rows.filter(r=>!(inMargin(r,p.h)&&(seen[key(r)]>=2||FOOT_RE.test(segText(r.segs[0]))))))).join('\n'):p.text).join('\n\n');
+  // pages → chunks of text; a column block continued onto the next page stays in the chunk of the page it started on
+  const chunks=[];let open=null;
+  for(const p of pages){
+    if(!p.rows){chunks.push(p.text);open=null;continue}
+    const rows=p.rows.filter(r=>!(inMargin(r,p.h)&&(seen[key(r)]>=2||FOOT_RE.test(segText(r.segs[0])))));
+    const lay=pdfLayout(rows,open);
+    chunks.push(lay.out);open=lay.open;
+  }
+  return chunks.map(c=>typeof c==='string'?c:pdfLines(flatCols(c)).join('\n')).join('\n\n');
 }
 async function decodeImage(f){
   const url=URL.createObjectURL(f);
