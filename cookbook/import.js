@@ -511,6 +511,7 @@ async function nextImport(){
 const sheet=on=>{$('#isheet').hidden=!on;if(on)$('#ishurl').value=''};
 $('#imp').onclick=()=>sheet(true);
 $('#ishfile').onclick=()=>{sheet(false);$('#impf').click()};
+$('#ufile').onclick=()=>$('#impf').click();
 $('#ishx').onclick=()=>sheet(false);
 $('#isheet').onclick=e=>{if(e.target.id==='isheet')sheet(false)};
 $('#ishf').onsubmit=async e=>{e.preventDefault();const v=$('#ishurl').value;if(!linkOf(v)){msg('Paste a link to a recipe page (starts with https://)',6000);return}
