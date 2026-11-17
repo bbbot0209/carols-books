@@ -1,7 +1,7 @@
 // Family Cookbook — one shared cookbook per link (#<token>); everyone with the link can view and edit.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261116e';
+const APPV='20261116f';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -23,8 +23,8 @@ const photoUrl=id=>id?API+'/photos/'+encodeURIComponent(id)+'.jpg':'';
 
 function msg(t,ms=4000){const m=$('#msg');m.textContent=t;m.classList.add('on');clearTimeout(msg.t);msg.t=setTimeout(()=>m.classList.remove('on'),ms)}
 
-async function api(method,path,body,raw){
-  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),raw?45000:15000);
+async function api(method,path,body,raw,ms){
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),ms||(raw?45000:15000));
   try{
     const r=await fetch(API+path,{method,signal:ctl.signal,cache:'no-store',
       headers:raw?{'Content-Type':'image/jpeg'}:body?{'Content-Type':'application/json'}:{},
@@ -59,7 +59,7 @@ const AB_KEY='fc-addedby';   // last “Added by” typed on this device
 // ---------- search / sort / filter ----------
 function matches(r,qw){
   if(!qw.length)return true;
-  const ws=words([r.title,r.ingredients,r.from,r.addedBy,...catsOf(r),...cuisOf(r),r.notes].join(' '));
+  const ws=words([r.title,r.ingredients,r.from,r.addedBy,...catsOf(r),...cuisOf(r),r.special,r.notes].join(' '));
   return qw.every(q=>ws.some(w=>w.startsWith(q)));
 }
 const cmpTxt=(a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true});
@@ -104,7 +104,9 @@ function render(){
   const v=visible(),n=book.recipes.length,filt=st.q||st.cat||st.cui||st.from||st.by;
   $('#count').textContent=filt?`${v.length} of ${n} recipe${n===1?'':'s'}`:`${n} recipe${n===1?'':'s'}`;
   $('#prall').hidden=!v.length||!!st.sel;$('#selbtn').hidden=!n||!!st.sel;
-  $('#list').innerHTML=v.length?v.map(cardHtml).join(''):`<div class="empty">${n?'No matches':'No recipes yet'}</div>`;
+  $('#list').innerHTML=v.length?v.map(cardHtml).join(''):`<div class="empty">${n?'No matches':'No recipes yet'}`+
+    (st.q.trim()?`<button class="btn" id="qweb">Search the web for “${esc(st.q.trim())}”</button>`:'')+`</div>`;
+  if($('#qweb'))$('#qweb').onclick=()=>webSearch(st.q);
   $('#qx').hidden=!st.q;
   $('#fabs').hidden=!!st.sel;$('#selbar').hidden=!st.sel;
   if(st.sel){const k=st.sel.size;$('#seln').textContent=k?`${k} selected`:'Tap recipes';$('#prsel').disabled=!k}
@@ -133,10 +135,12 @@ function recipeHtml(r,pr){
   if(pr)return `<article class="pr">${r.photo?`<img src="${esc(photoUrl(r.photo))}" alt="">`:''}<h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}${r.addedBy?`<div class="ab">${esc(byTxt(r))}</div>`:''}`+
     (facts?`<div class="facts">${[cs&&(catsOf(r).length>1?'Categories: ':'Category: ')+cs,us&&'Cuisine: '+us,r.time&&'Time: '+r.time,r.servings&&'Serves: '+r.servings].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ')}</div>`:'')+
     (ing?`<h3>Ingredients</h3><ul>${ing}</ul>`:'')+(stp?`<h3>Steps</h3><ol>${stp}</ol>`:'')+
+    (r.special?`<h3>Special instructions</h3><div class="notes special">${esc(r.special)}</div>`:'')+
     (r.notes?`<h3>Notes</h3><div class="notes">${esc(r.notes)}</div>`:'')+`<div class="clear"></div></article>`;
   return (r.photo?`<img class="hero" src="${esc(photoUrl(r.photo))}" alt="">`:'')+`<div class="rv"><h2>${esc(r.title)}</h2>${r.from?`<div class="cf">${esc(fromTxt(r))}</div>`:''}${r.addedBy?`<div class="ab">${esc(byTxt(r))}</div>`:''}`+
     (facts?`<div class="facts">${facts}</div>`:'')+
     (ing?`<h3>Ingredients</h3><ul class="ing">${ing}</ul>`:'')+(stp?`<h3>Steps</h3><ol class="stp">${stp}</ol>`:'')+
+    (r.special?`<h3>Special instructions</h3><div class="notes special">${linkify(r.special)}</div>`:'')+
     (r.notes?`<h3>Notes</h3><div class="notes">${linkify(r.notes)}</div>`:'')+
     `<div class="vact"><button class="btn" id="vprint">Print</button><button class="btn pri" id="vedit2">Edit</button></div></div>`;
 }
@@ -147,7 +151,7 @@ function renderView(){
 }
 
 // ---------- edit ----------
-const FIELDS=['title','from','addedBy','servings','time','ingredients','steps','notes'];
+const FIELDS=['title','from','addedBy','servings','time','ingredients','steps','special','notes'];
 function fillForm(r){
   FIELDS.forEach(k=>$('#f-'+k).value=r[k]||'');
   ed.categories=[...catsOf(r)];ed.cuisines=[...cuisOf(r)];
@@ -271,6 +275,12 @@ async function printRecipes(list){
   window.print();
 }
 
+// ---------- find recipes online ----------
+// Opens a Google search in a new tab — no API, no key. The recipe found there comes back via “Import from a link”.
+const webUrl=q=>'https://www.google.com/search?q='+encodeURIComponent(q.trim().replace(/\s+recipes?$/i,'')+' recipe');
+function webSearch(q){q=String(q||'').trim();if(!q){msg('Type what to look for');$('#wq').focus();return}
+  window.open(webUrl(q),'_blank','noopener')}
+
 // ---------- share ----------
 const shareUrl=()=>location.origin+location.pathname+'#'+tok;
 async function share(){
@@ -335,6 +345,7 @@ $('#seldone').onclick=()=>{st.sel=null;render()};
 $('#prsel').onclick=()=>{if(st.sel&&st.sel.size)printRecipes(sorted(book.recipes.filter(r=>st.sel.has(r.id))))};
 $('#prall').onclick=()=>printRecipes(visible());
 $('#share').onclick=share;
+$('#wf').onsubmit=e=>{e.preventDefault();webSearch($('#wq').value)};
 $('#add').onclick=()=>openEdit('');
 $('#vback').onclick=back;
 $('#vedit').onclick=()=>cur&&openEdit(cur);

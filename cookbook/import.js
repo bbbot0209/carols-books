@@ -25,6 +25,7 @@ const AP="(?:'|’)?";
 const HDRS=[
   ['ing','ingredients?|ingredient\\s*list'],
   ['stp','instructions?|steps?|directions?|methods?|preparations?'],
+  ['special','special\\s*instructions?'],          // v20261116f: its own field
   ['notes',`cook${AP}s\\s*notes?|chef${AP}s\\s*notes?|recipe\\s*notes?|notes?|tips?`],
   ['time','(?:prep(?:aration)?|cook(?:ing)?|total|bake|baking|active|inactive|chill(?:ing)?|rest(?:ing)?|ready\\s*in)\\s*times?|times?'],
   ['time2','prep|cook|total|ready\\s*in'],           // short forms: need a colon
@@ -72,7 +73,7 @@ function header(line,joined){
     let ok=false;
     if(kind==='servings')ok=/^(?:about\s+|approx\.?\s+|up to\s+)?[\d½¼¾⅓⅔]|^(?:one|two|three|four|five|six|eight|ten|twelve|a dozen|about)\b/i.test(rest);
     else if(kind==='time')ok=!/^times?$/i.test(best.word)&&/^(?:about\s+|approx\.?\s+|under\s+)?\d/i.test(rest);
-    else if(kind==='ing'||kind==='stp'||kind==='notes'){
+    else if(kind==='ing'||kind==='stp'||kind==='notes'||kind==='special'){
       if(/^steps?$/i.test(best.word)&&/^\d/.test(rest))return null;   // "Step 1 …" is a step, not a header
       ok=caps||glued||/^[\d½¼¾⅓⅔⅛•·*(–-]/.test(rest)||(rest.endsWith(':')&&rest.length<=40);
     }
@@ -101,8 +102,8 @@ function joinWrapped(lines){
 
 function parseText(text,fallbackTitle=''){
   const raw=String(text||'').replace(/\r\n?/g,'\n').replace(/[   ]/g,' ').replace(/[​﻿]/g,'');
-  const r={title:'',ingredients:'',steps:'',servings:'',time:'',notes:'',from:'',categories:[],cuisines:[]};
-  const sec={pre:[],ing:[],stp:[],notes:[],skip:[]},times=[];
+  const r={title:'',ingredients:'',steps:'',special:'',servings:'',time:'',notes:'',from:'',categories:[],cuisines:[]};
+  const sec={pre:[],ing:[],stp:[],special:[],notes:[],skip:[]},times=[];
   let main='pre',meta=null,sawMain=false;
   const apply=(kind,word,val)=>{
     for(const part of String(val).split(META_IN)){       // "20 minutes Cook Time: 3 hours"
@@ -154,13 +155,14 @@ function parseText(text,fallbackTitle=''){
   r.steps=joinWrapped(nb(sec.stp)).map(clean).filter(Boolean).join('\n');
   const tidy=a=>a.join('\n').replace(/\n{3,}/g,'\n\n').trim();
   r.notes=[tidy(intro),tidy(sec.notes)].filter(Boolean).join('\n\n');
+  r.special=tidy(sec.special);
   r.time=[...new Set(times)].join(', ').slice(0,120);
   r.servings=r.servings.slice(0,60);r.from=r.from.slice(0,100);
   r.categories=normTags(r.categories,CATS);r.cuisines=normTags(r.cuisines,CUISINES);
   if(!r.title)r.title=fallbackTitle;
   r.title=r.title.slice(0,200);
   r.ok=!!(r.ingredients||r.steps);
-  if(!r.ok){r.notes=raw.replace(/\u2063/g,' ').replace(/\n{3,}/g,'\n\n').trim();r.ingredients=r.steps=''}
+  if(!r.ok){r.notes=raw.replace(/\u2063/g,' ').replace(/\n{3,}/g,'\n\n').trim();r.ingredients=r.steps=r.special=''}
   return r;
 }
 
@@ -214,15 +216,19 @@ function htmlText(root){
   })(root);
   return out;
 }
+// recipe photo: JSON-LD `image` (string | [..] | ImageObject), else the page's og:image
+const ldImage=v=>!v?'':typeof v==='string'?v:Array.isArray(v)?ldImage(v.find(Boolean)):(v.url||v.contentUrl||'');
 function parseHtml(src,name){
   const doc=new DOMParser().parseFromString(src,'text/html');
+  const og=(doc.querySelector('meta[property="og:image"],meta[name="og:image"]')||{}).content||'';
   for(const s of doc.querySelectorAll('script[type="application/ld+json"]')){
-    try{const rc=findRecipe(JSON.parse(s.textContent));if(rc){const r=fromLd(rc);if(r.ok||r.title)return r}}catch{}
+    try{const rc=findRecipe(JSON.parse(s.textContent));if(rc){const r=fromLd(rc);if(r.ok||r.title){r.image=ldImage(rc.image)||og;return r}}}catch{}
   }
   const main=doc.querySelector('[itemtype*="schema.org/Recipe"]')||doc.querySelector('article')||doc.querySelector('main')||doc.body;
   if(!main)return parseText('',name);
   const ttl=(doc.querySelector('h1')||{}).textContent;
   const r=parseText(htmlText(main),(ttl||doc.title||name).trim());
+  r.image=og;
   return r;
 }
 
@@ -426,6 +432,51 @@ async function parseFile(f){
   throw new Error('Can’t read that kind of file');
 }
 
+// Open the Add form prefilled (never saved until Save). Values are cut to the form/server limits.
+const IMP_MAX={title:200,from:100,servings:60,time:120,ingredients:12000,steps:24000,special:4000,notes:12000};
+function fillImported(fields){
+  openEdit('');ed.fromImport=true;
+  for(const [k,n] of Object.entries(IMP_MAX))if(fields[k])$('#f-'+k).value=String(fields[k]).slice(0,n);
+  tagAdd('categories',(fields.categories||[]).join(','));tagAdd('cuisines',(fields.cuisines||[]).join(','));
+}
+
+// ---------- import from a web page link (v20261116f) ----------
+// The cookbook server fetches the page (guarded, see server.py import-url); it is parsed here with the same
+// JSON-LD-first / readable-text parser as a saved .html file. The link goes into Notes as "Source: <url>".
+function linkOf(v){v=String(v||'').trim();const m=v.match(/https?:\/\/\S+/i);if(m)return m[0];
+  if(/^(www\.|[a-z0-9-]+\.)+[a-z]{2,}(\/|$)/i.test(v))return 'https://'+v;return ''}
+let urlBusy=false;
+async function importUrl(raw){
+  const url=linkOf(raw);
+  if(!url){msg('Paste a link to a recipe page (starts with https://)',6000);return false}
+  if(urlBusy||!tok)return false;
+  urlBusy=true;busy('Getting the recipe…');
+  try{
+    const d=await api('POST',`/books/${tok}/import-url`,{url},null,40000);
+    const page=d.url||url,host=(()=>{try{return new URL(page).hostname.replace(/^www\./,'')}catch{return ''}})();
+    const fields=parseHtml(d.html||'',host);
+    let blob=null;
+    if(fields.image){
+      busy('Getting the photo…');
+      try{const im=await api('POST',`/books/${tok}/import-url`,{url:new URL(fields.image,page).href,kind:'image'},null,40000);
+        const b=Uint8Array.from(atob(im.data),c=>c.charCodeAt(0));blob=await shrink(new Blob([b],{type:im.type}))}catch{}
+    }
+    busy(false);
+    const src='Source: '+page;   // no separate link field → the page goes at the end of Notes (kept within the limit)
+    fields.notes=[fields.ok?String(fields.notes||'').slice(0,Math.max(0,IMP_MAX.notes-src.length-2)).trim():'',src].filter(Boolean).join('\n\n');
+    if(!fields.ok){fields.ingredients=fields.steps=fields.special=''}
+    if(!fields.title)fields.title=host;
+    fillImported(fields);
+    if(blob&&ed){ed.blob=blob;ed.blobUrl=URL.createObjectURL(blob);showPhoto()}
+    msg(fields.ok?'Check it over, then Save':'Couldn’t find the recipe on that page — fill it in or try another link',fields.ok?5000:8000);
+    return true;
+  }catch(e){
+    busy(false);
+    msg(e.data&&e.data.blocked?'That site blocked the import — save the page (or print to PDF) and use Import.':(e.message||'Couldn’t import that link'),9000);
+    return false;
+  }finally{urlBusy=false}
+}
+
 // ---------- queue: one file at a time, each through the Add form ----------
 const importQ=[];
 let importing=false;
@@ -441,9 +492,7 @@ async function nextImport(){
     busy('Reading '+f.name+'…');
     const {fields,image}=await parseFile(f);
     busy(false);
-    openEdit('');ed.fromImport=true;
-    for(const k of ['title','from','servings','time','ingredients','steps','notes'])if(fields[k])$('#f-'+k).value=fields[k];
-    tagAdd('categories',(fields.categories||[]).join(','));tagAdd('cuisines',(fields.cuisines||[]).join(','));
+    fillImported(fields);
     if(image&&confirm('Use this picture as the recipe photo?')){
       try{const b=await shrink(image);if(ed){ed.blob=b;ed.blobUrl=URL.createObjectURL(b);showPhoto()}}catch{}
     }
@@ -458,7 +507,15 @@ async function nextImport(){
 }
 
 // ---------- wiring ----------
-$('#imp').onclick=()=>$('#impf').click();
+// Import button → small sheet: a file/photo, or a web page link
+const sheet=on=>{$('#isheet').hidden=!on;if(on)$('#ishurl').value=''};
+$('#imp').onclick=()=>sheet(true);
+$('#ishfile').onclick=()=>{sheet(false);$('#impf').click()};
+$('#ishx').onclick=()=>sheet(false);
+$('#isheet').onclick=e=>{if(e.target.id==='isheet')sheet(false)};
+$('#ishf').onsubmit=async e=>{e.preventDefault();const v=$('#ishurl').value;if(!linkOf(v)){msg('Paste a link to a recipe page (starts with https://)',6000);return}
+  sheet(false);await importUrl(v)};
+$('#uf').onsubmit=async e=>{e.preventDefault();if(await importUrl($('#uq').value))$('#uq').value=''};
 $('#impf').onchange=e=>{const fs=[...e.target.files];e.target.value='';queueFiles(fs)};
 // drag-and-drop anywhere on the list screen
 let dragDepth=0;
