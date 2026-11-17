@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Family Cookbook">
+<meta name="application-name" content="Family Cookbook">
+<meta name="theme-color" content="#f7f0e4">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<title>Family Cookbook</title>
+<style>
+  :root{--bg:#f7f0e4;--card:#fffcf6;--ink:#2a211b;--mute:#6f6258;--line:#e4d8c6;--acc:#a94a2a;--acc-d:#8a3a20;--soft:#f1e3d0;--grn:#3f6a52}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{cursor:pointer}
+  [hidden]{display:none!important}
+  .serif{font-family:Georgia,"Iowan Old Style","Times New Roman",serif}
+
+  /* start screen */
+  #start{max-width:460px;margin:0 auto;padding:calc(48px + env(safe-area-inset-top)) 22px 40px;text-align:center}
+  #start img{width:96px;height:96px;border-radius:22px;box-shadow:0 6px 20px rgba(120,60,30,.25)}
+  #start h1{font:600 34px Georgia,serif;margin:18px 0 26px}
+  #start form{display:flex;flex-direction:column;gap:10px;margin-bottom:30px;text-align:left}
+  #start label{font-size:15px;color:var(--mute);font-weight:600}
+  .inp{width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;font-size:18px;min-height:50px}
+  .inp:focus{outline:none;border-color:var(--acc)}
+  .btn{min-height:50px;padding:12px 18px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);font-size:18px;font-weight:600}
+  .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+  .btn.pri:active{background:var(--acc-d)}
+  .btn.danger{color:#a32020;border-color:#e9c9c0;background:#fff}
+
+  /* list screen */
+  header{background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line)}
+  .hrow{display:flex;align-items:center;gap:10px}
+  header h1{flex:1;min-width:0;margin:0;font:600 25px/1.15 Georgia,serif;overflow-wrap:anywhere}
+  .share{flex:0 0 auto;min-height:44px;padding:8px 13px;border-radius:99px;border:1.5px solid var(--acc);background:transparent;color:var(--acc);font-size:15px;font-weight:600}
+  .search{margin-top:10px;position:relative}
+  .search input{padding-left:42px}
+  .search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:20px;height:20px;color:var(--mute)}
+  .search .clr{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:0;background:none;font-size:24px;color:var(--mute)}
+  .fl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .fl select,.sortsel{width:100%;min-width:0;min-height:44px;text-overflow:ellipsis;padding:8px 30px 8px 12px;border:1.5px solid var(--line);border-radius:12px;font-size:16px;-webkit-appearance:none;appearance:none;
+    background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236f6258' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 11px center}
+  .sortsel{width:auto!important;flex:0 1 auto;border:0!important;background-color:transparent!important;padding-left:2px!important;padding-right:24px!important;background-position:right 4px center!important;color:var(--grn);font-weight:600}
+  .fl select.on{border-color:var(--acc);color:var(--acc);font-weight:600}
+  main{padding:10px 16px calc(110px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
+  .crow{display:flex;align-items:center;gap:2px;margin:0 0 2px}
+  .crow .sp{flex:1}
+  .count{color:var(--mute);font-size:16px;margin:0 2px 10px}
+  .lnk{min-height:44px;padding:8px 10px;border:0;background:none;color:var(--grn);font-size:16px;font-weight:600}
+  .card{display:flex;gap:14px;align-items:center;width:100%;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:10px;margin-bottom:10px;min-height:96px}
+  .card:active{background:var(--soft)}
+  .th{flex:0 0 76px;width:76px;height:76px;border-radius:12px;object-fit:cover;background:var(--soft)}
+  .ph0{display:flex;align-items:center;justify-content:center;font:600 30px Georgia,serif;color:var(--acc)}
+  .cb{flex:1;min-width:0}
+  .ct{font:600 20px/1.25 Georgia,serif;margin:0 0 3px;overflow-wrap:anywhere}
+  .cf{color:var(--mute);font-size:16px}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .pill{font-size:14px;padding:3px 10px;border-radius:99px;background:var(--soft);color:var(--ink)}
+  .pill.c{background:#f6dccf;color:var(--acc-d)}
+  .tick{flex:0 0 30px;width:30px;height:30px;border-radius:50%;border:2px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px}
+  .card.sel{border-color:var(--acc);background:#fff4ec}
+  .card.sel .tick{background:var(--acc);border-color:var(--acc)}
+  .empty{text-align:center;color:var(--mute);padding:50px 10px;font-size:18px}
+  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:6;min-height:58px;padding:0 24px 0 20px;border-radius:99px;border:0;background:var(--acc);color:#fff;font-size:19px;font-weight:700;box-shadow:0 6px 18px rgba(120,50,20,.3)}
+  .fab b{font-size:28px;line-height:0;vertical-align:-3px;margin-right:4px;font-weight:400}
+  .selbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+  .selbar .n{flex:1;font-size:17px}
+  .selbar button{min-height:46px;padding:8px 14px;border-radius:12px;border:0;font-size:16px;font-weight:600;background:#fff;color:var(--ink)}
+  .selbar .pri{background:var(--acc);color:#fff}
+  .selbar button:disabled{opacity:.45}
+
+  /* overlay screens (recipe view, edit form) */
+  .scr{position:fixed;inset:0;z-index:20;background:var(--card);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  html.modal,html.modal body{overflow:hidden}
+  .bar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;background:var(--card);border-bottom:1px solid var(--line);padding:calc(6px + env(safe-area-inset-top)) 8px 6px}
+  .bar .tt{flex:1;min-width:0;text-align:center;font:600 18px Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar button{flex:0 0 auto;min-width:76px;min-height:44px;padding:8px 10px;border:0;border-radius:10px;background:none;font-size:18px;color:var(--grn);font-weight:600}
+  .bar .pri{background:var(--acc);color:#fff}
+  .bar button:disabled{opacity:.5}
+  .wrap{max-width:680px;margin:0 auto;padding:0 0 calc(40px + env(safe-area-inset-bottom))}
+  .hero{display:block;width:100%;max-height:62vh;object-fit:cover;background:var(--soft)}
+  .rv{padding:16px 20px}
+  .rv h2{font:600 30px/1.2 Georgia,serif;margin:4px 0 6px;overflow-wrap:anywhere}
+  .rv .cf{font-size:18px}
+  .facts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+  .fact{background:var(--soft);border-radius:12px;padding:6px 12px;font-size:16px}
+  .fact span{color:var(--mute);margin-right:4px}
+  .rv h3{font:600 22px Georgia,serif;margin:22px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--soft)}
+  .ing{list-style:none;margin:0;padding:0}
+  .ing li{padding:8px 0 8px 26px;position:relative;border-bottom:1px solid #f1e8da;font-size:19px}
+  .ing li:before{content:"";position:absolute;left:6px;top:18px;width:8px;height:8px;border-radius:50%;background:var(--acc)}
+  .ing li.sub,.stp li.sub{padding-left:0;font-weight:700;border:0;margin-top:8px;list-style:none}
+  .ing li.sub:before{display:none}
+  .stp{margin:0;padding:0;list-style:none;counter-reset:s}
+  .stp li{position:relative;padding:4px 0 14px 46px;font-size:19px}
+  .stp li:not(.sub):before{counter-increment:s;content:counter(s);position:absolute;left:0;top:2px;width:32px;height:32px;border-radius:50%;background:var(--acc);color:#fff;font:700 17px/32px -apple-system,sans-serif;text-align:center}
+  .notes{white-space:pre-wrap;font-size:18px;overflow-wrap:anywhere}
+  .notes a{color:var(--grn)}
+  .vact{display:flex;gap:10px;margin-top:28px}
+  .vact .btn{flex:1}
+
+  form.ed{padding:6px 18px 30px}
+  form.ed label{display:block;font-size:15px;font-weight:600;color:var(--mute);margin:16px 0 6px}
+  form.ed textarea{min-height:150px;line-height:1.45;resize:vertical}
+  form.ed textarea.sm{min-height:90px}
+  .row{display:flex;gap:10px}.row>div{flex:1;min-width:0}
+  .phbox{display:flex;align-items:center;gap:12px}
+  .phbtns{display:flex;flex-direction:column;gap:8px}
+  .phbox img{width:110px;height:110px;object-fit:cover;border-radius:12px;background:var(--soft)}
+  .phbox .btn{min-height:46px;font-size:16px}
+  .sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .sug button{min-height:38px;padding:6px 12px;border-radius:99px;border:1.5px solid var(--line);background:#fff;font-size:15px}
+  .sug button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .edb{display:flex;gap:10px;margin-top:26px}
+  .edb .btn{flex:1}
+
+  #msg{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);z-index:50;max-width:92vw;background:var(--ink);color:#fff;padding:12px 18px;border-radius:14px;font-size:17px;opacity:0;pointer-events:none;transition:.25s;text-align:center}
+  #msg.on{opacity:1;transform:translateX(-50%)}
+  #print{display:none}
+
+  @media (min-width:700px){.th{flex-basis:96px;width:96px;height:96px}}
+
+  @media print{
+    @page{margin:14mm}
+    body{background:#fff;color:#000;font:12pt/1.4 Georgia,"Times New Roman",serif}
+    body>*:not(#print){display:none!important}
+    #print{display:block!important}
+    .pr{break-inside:avoid;page-break-inside:avoid;padding:0 0 14pt;margin:0 0 16pt;border-bottom:1px solid #bbb}
+    .pr:last-child{border-bottom:0}
+    .pr h2{font-size:20pt;margin:0 0 2pt}
+    .pr .cf{color:#444;font-size:11pt}
+    .pr img{float:right;width:2.4in;max-height:2.6in;object-fit:cover;margin:0 0 8pt 12pt;border-radius:4pt}
+    .pr .facts{font-size:10.5pt;color:#333;margin:4pt 0}
+    .pr h3{font-size:13pt;margin:10pt 0 4pt;border-bottom:1px solid #ccc}
+    .pr ul{margin:0;padding-left:16pt}
+    .pr ol{margin:0;padding-left:20pt}
+    .pr li{margin:0 0 3pt}
+    .pr li.sub{list-style:none;margin-left:-16pt;font-weight:bold}
+    .pr ol li.sub{margin-left:-20pt}
+    .pr .notes{font-size:11.5pt;white-space:pre-wrap}
+    .pr .clear{clear:both}
+  }
+</style>
+</head>
+<body>
+
+<section id="start" hidden>
+  <img src="icon.png" alt="">
+  <h1>Family Cookbook</h1>
+  <form id="newf">
+    <label for="newname">Start a cookbook</label>
+    <input class="inp" id="newname" value="Family Cookbook" maxlength="100" autocomplete="off">
+    <button class="btn pri" id="newbtn">Start</button>
+  </form>
+  <form id="openf">
+    <label for="openlink">Have a link?</label>
+    <input class="inp" id="openlink" placeholder="Paste link" autocomplete="off" autocapitalize="off">
+    <button class="btn">Open</button>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header>
+    <div class="hrow"><h1 id="bname">Family Cookbook</h1><button class="share" id="share">Share with family</button></div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+      <input class="inp" id="q" type="search" placeholder="Search recipes" autocomplete="off" enterkeyhint="search">
+      <button class="clr" id="qx" hidden aria-label="Clear">×</button>
+    </div>
+    <div class="fl">
+      <select id="fcat" aria-label="Category"></select>
+      <select id="ffrom" aria-label="From"></select>
+    </div>
+  </header>
+  <main>
+    <div class="crow"><select id="sort" class="sortsel" aria-label="Sort">
+        <option value="added">Recently added</option><option value="title">Title A→Z</option><option value="category">Category</option><option value="from">From</option>
+      </select><span class="sp"></span><button class="lnk" id="selbtn">Select</button><button class="lnk" id="prall">Print all</button></div>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </main>
+  <button class="fab" id="add"><b>+</b> Add recipe</button>
+  <div class="selbar" id="selbar" hidden><span class="n" id="seln"></span><button class="pri" id="prsel">Print selected</button><button id="seldone">Done</button></div>
+</div>
+
+<section class="scr" id="view" hidden>
+  <div class="bar"><button id="vback">‹ Back</button><div class="tt" id="vtt"></div><button id="vedit">Edit</button></div>
+  <div class="wrap" id="vbody"></div>
+</section>
+
+<section class="scr" id="edit" hidden>
+  <div class="bar"><button id="ecancel">Cancel</button><div class="tt" id="ett"></div><button class="pri" id="esave">Save</button></div>
+  <div class="wrap">
+    <form class="ed" id="ef" autocomplete="off">
+      <label for="f-title">Title</label>
+      <input class="inp" id="f-title" maxlength="200" required>
+      <label>Photo</label>
+      <div class="phbox"><img id="f-phimg" alt="" hidden><div class="phbtns"><button type="button" class="btn" id="f-phbtn">Add photo</button><button type="button" class="btn" id="f-phrm" hidden>Remove</button></div>
+        <input type="file" id="f-photo" accept="image/*" hidden></div>
+      <label for="f-from">From</label>
+      <input class="inp" id="f-from" maxlength="100" placeholder="e.g. Grandma Ruth" list="froms">
+      <datalist id="froms"></datalist>
+      <label for="f-category">Category</label>
+      <input class="inp" id="f-category" maxlength="60" list="cats">
+      <datalist id="cats"></datalist>
+      <div class="sug" id="catsug"></div>
+      <div class="row">
+        <div><label for="f-servings">Servings</label><input class="inp" id="f-servings" maxlength="60" placeholder="e.g. 4"></div>
+        <div><label for="f-time">Time</label><input class="inp" id="f-time" maxlength="120" placeholder="e.g. 1 hr"></div>
+      </div>
+      <label for="f-ingredients">Ingredients <small>(one per line)</small></label>
+      <textarea class="inp" id="f-ingredients" maxlength="12000"></textarea>
+      <label for="f-steps">Steps <small>(one per line)</small></label>
+      <textarea class="inp" id="f-steps" maxlength="24000"></textarea>
+      <label for="f-notes">Notes</label>
+      <textarea class="inp sm" id="f-notes" maxlength="12000"></textarea>
+      <div class="edb"><button type="button" class="btn danger" id="edel">Delete</button><button class="btn pri" id="esave2">Save</button></div>
+    </form>
+  </div>
+</section>
+
+<div id="print"></div>
+<div id="msg" role="status"></div>
+<script src="app.js?v=20261116a"></script>
+</body>
+</html>
