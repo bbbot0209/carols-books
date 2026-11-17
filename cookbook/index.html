@@ -54,6 +54,7 @@
   main{padding:10px 16px calc(110px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
   .crow{display:flex;align-items:center;gap:2px;margin:0 0 2px}
   .crow .sp{flex:1}
+  .sortlbl{font-size:15px;color:var(--mute);margin-right:4px;white-space:nowrap}
   .count{color:var(--mute);font-size:16px;margin:0 2px 10px}
   .lnk{min-height:44px;padding:8px 10px;border:0;background:none;color:var(--grn);font-size:16px;font-weight:600}
   .card{display:flex;gap:14px;align-items:center;width:100%;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:10px;margin-bottom:10px;min-height:96px}
@@ -212,7 +213,7 @@
     </div>
   </header>
   <main>
-    <div class="crow"><select id="sort" class="sortsel" aria-label="Sort">
+    <div class="crow"><label for="sort" class="sortlbl">Sort by</label><select id="sort" class="sortsel" aria-label="Sort by">
         <option value="title">Title A→Z</option><option value="added">Recently added</option><option value="category">Category</option><option value="cuisine">Cuisine</option><option value="from">From</option><option value="addedby">Added by</option>
       </select><span class="sp"></span><button class="lnk" id="selbtn">Select</button><button class="lnk" id="prall">Print all</button></div>
     <div class="count" id="count"></div>
@@ -282,7 +283,7 @@
 <div id="busy" hidden><div><i></i><span id="busyt">Reading…</span></div></div>
 <div id="print"></div>
 <div id="msg" role="status"></div>
-<script src="app.js?v=20261116h"></script>
-<script src="import.js?v=20261116h"></script>
+<script src="app.js?v=20261116i"></script>
+<script src="import.js?v=20261116i"></script>
 </body>
 </html>
