@@ -1,7 +1,7 @@
 // Family Cookbook — one shared cookbook per link (#<token>); everyone with the link can view and edit.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261116g';
+const APPV='20261116h';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -38,7 +38,7 @@ async function api(method,path,body,raw,ms){
 
 // ---------- state ----------
 let tok='',book={name:'',recipes:[]};
-const st={q:'',sort:localStorage.getItem('fc-sort')||'added',cat:'',cui:'',from:'',by:'',sel:null};  // sel = Set of ids in Select mode
+const st={q:'',sort:localStorage.getItem('fc-sort2')||'title',cat:'',cui:'',from:'',by:'',sel:null};  // sel = Set of ids in Select mode
 let cur=null;      // recipe id open in the view
 let ed=null;       // edit state {id, updated, photo, blob, blobUrl}
 const byId=id=>book.recipes.find(r=>r.id===id);
@@ -331,7 +331,7 @@ $('#openf').onsubmit=e=>{e.preventDefault();const v=$('#openlink').value.trim(),
 let qt=0;$('#q').oninput=()=>{clearTimeout(qt);qt=setTimeout(()=>{st.q=$('#q').value;render()},120)};
 $('#q').onkeydown=e=>{if(e.key==='Enter')e.target.blur()};
 $('#qx').onclick=()=>{$('#q').value='';st.q='';render()};
-$('#sort').onchange=e=>{st.sort=e.target.value;localStorage.setItem('fc-sort',st.sort);render()};
+$('#sort').onchange=e=>{st.sort=e.target.value;localStorage.setItem('fc-sort2',st.sort);render()};
 $('#fcat').onchange=e=>{st.cat=e.target.value;render()};
 $('#fcui').onchange=e=>{st.cui=e.target.value;render()};
 $('#ffrom').onchange=e=>{st.from=e.target.value;render()};
