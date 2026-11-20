@@ -26,8 +26,8 @@ const HDRS=[
   ['ing','ingredients?|ingredient\\s*list'],
   // v20261117a: "Preparation" is a Steps header like Instructions/Steps/Directions/Method, incl. the two-word forms
   ['stp','(?:preparation|cooking|baking)\\s*(?:steps?|instructions?|directions?|methods?)|methods?\\s*of\\s*preparation|instructions?|steps?|directions?|methods?|preparations?'],
-  ['special','special\\s*instructions?'],          // v20261116f: its own field
-  ['modifications','my\\s*modifications?|modifications?|my\\s*changes|changes|variations?'],   // v20261117a: its own field
+  ['special','special\\s*instructions?'],          // v20261120a: folded into the start of Notes (foldExtras)
+  ['modifications','my\\s*modifications?|modifications?|my\\s*changes|changes|variations?'],   // v20261120a: folded into the start of Notes
   ['notes',`cook${AP}s\\s*notes?|chef${AP}s\\s*notes?|recipe\\s*notes?|notes?|tips?`],
   ['time','(?:prep(?:aration)?|cook(?:ing)?|total|bake|baking|active|inactive|chill(?:ing)?|rest(?:ing)?|ready\\s*in)\\s*times?|times?'],
   ['time2','prep|cook|total|ready\\s*in'],           // short forms: need a colon
@@ -112,9 +112,12 @@ function joinWrapped(lines){
   return out;
 }
 
+// v20261120a: Modifications / Special instructions sections have no field of their own — they go at the START of
+// Notes as labelled blocks (same format as the server's fold_extras): "Modifications:\n…\n\nSpecial instructions:\n…\n\n<notes>".
+const foldExtras=(notes,mods,special)=>[mods&&'Modifications:\n'+mods,special&&'Special instructions:\n'+special,notes].filter(Boolean).join('\n\n');
 function parseText(text,fallbackTitle=''){
   const raw=String(text||'').replace(/\r\n?/g,'\n').replace(/[   ]/g,' ').replace(/[​﻿]/g,'');
-  const r={title:'',ingredients:'',steps:'',special:'',modifications:'',servings:'',time:'',notes:'',from:'',categories:[],cuisines:[]};
+  const r={title:'',ingredients:'',steps:'',servings:'',time:'',notes:'',from:'',categories:[],cuisines:[]};
   const sec={pre:[],ing:[],stp:[],special:[],modifications:[],notes:[],skip:[]},times=[];
   let main='pre',meta=null,sawMain=false;
   const apply=(kind,word,val)=>{
@@ -170,16 +173,14 @@ function parseText(text,fallbackTitle=''){
   r.ingredients=joinWrapped(nb(sec.ing)).map(clean).filter(Boolean).join('\n');
   r.steps=joinWrapped(nb(sec.stp)).map(clean).filter(Boolean).join('\n');
   const tidy=a=>a.join('\n').replace(/\n{3,}/g,'\n\n').trim();
-  r.notes=[tidy(intro),tidy(sec.notes)].filter(Boolean).join('\n\n');
-  r.special=tidy(sec.special);
-  r.modifications=tidy(sec.modifications);
+  r.notes=foldExtras([tidy(intro),tidy(sec.notes)].filter(Boolean).join('\n\n'),tidy(sec.modifications),tidy(sec.special));
   r.time=[...new Set(times)].join(', ').slice(0,120);
   r.servings=r.servings.slice(0,60);r.from=r.from.slice(0,100);
   r.categories=normTags(r.categories,CATS);r.cuisines=normTags(r.cuisines,CUISINES);
   if(!r.title)r.title=fallbackTitle;
   r.title=r.title.slice(0,200);
   r.ok=!!(r.ingredients||r.steps);
-  if(!r.ok){r.notes=raw.replace(/\u2063/g,' ').replace(/\n{3,}/g,'\n\n').trim();r.ingredients=r.steps=r.special=r.modifications=''}
+  if(!r.ok){r.notes=raw.replace(/\u2063/g,' ').replace(/\n{3,}/g,'\n\n').trim();r.ingredients=r.steps=''}
   return r;
 }
 
@@ -552,7 +553,7 @@ async function parseFile(f){
 }
 
 // Open the Add form prefilled (never saved until Save). Values are cut to the form/server limits.
-const IMP_MAX={title:200,from:100,servings:60,time:120,ingredients:12000,steps:24000,special:4000,modifications:4000,notes:12000};
+const IMP_MAX={title:200,from:100,servings:60,time:120,ingredients:12000,steps:24000,notes:20000};
 function fillImported(fields){
   openEdit('');ed.fromImport=true;
   for(const [k,n] of Object.entries(IMP_MAX))if(fields[k])$('#f-'+k).value=String(fields[k]).slice(0,n);
@@ -583,7 +584,7 @@ async function importUrl(raw){
     busy(false);
     const src='Source: '+page;   // no separate link field → the page goes at the end of Notes (kept within the limit)
     fields.notes=[fields.ok?String(fields.notes||'').slice(0,Math.max(0,IMP_MAX.notes-src.length-2)).trim():'',src].filter(Boolean).join('\n\n');
-    if(!fields.ok){fields.ingredients=fields.steps=fields.special=fields.modifications=''}
+    if(!fields.ok){fields.ingredients=fields.steps=''}
     if(!fields.title)fields.title=host;
     fillImported(fields);
     if(blob&&ed){ed.blob=blob;ed.blobUrl=URL.createObjectURL(blob);showPhoto()}
