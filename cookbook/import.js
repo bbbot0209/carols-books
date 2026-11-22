@@ -569,7 +569,7 @@ let urlBusy=false;
 async function importUrl(raw){
   const url=linkOf(raw);
   if(!url){msg('Paste a link to a recipe page (starts with https://)',6000);return false}
-  if(urlBusy||!tok)return false;
+  if(urlBusy||!tok||ro)return false;
   urlBusy=true;busy('Getting the recipe…');
   try{
     const d=await api('POST',`/books/${tok}/import-url`,{url},null,40000);
@@ -601,6 +601,7 @@ async function importUrl(raw){
 const importQ=[];
 let importing=false;
 function queueFiles(files){
+  if(ro){msg('This is a view-only link');return}
   const fs=[...files].filter(f=>f&&f.size>0);if(!fs.length)return;
   importQ.push(...fs);if(!importing&&!ed&&$('#edit').hidden)nextImport();
 }
@@ -628,7 +629,7 @@ async function nextImport(){
 
 // ---------- wiring ----------
 // Import button → small sheet: a file/photo, or a web page link
-const sheet=on=>{$('#isheet').hidden=!on;if(on)$('#ishurl').value=''};
+const sheet=on=>{if(ro&&on)return;$('#isheet').hidden=!on;if(on)$('#ishurl').value=''};
 $('#imp').onclick=()=>sheet(true);
 $('#ishfile').onclick=()=>{sheet(false);$('#impf').click()};
 $('#ufile').onclick=()=>$('#impf').click();
@@ -641,7 +642,7 @@ $('#impf').onchange=e=>{const fs=[...e.target.files];e.target.value='';queueFile
 // drag-and-drop anywhere on the list screen
 let dragDepth=0;
 const hasFiles=e=>e.dataTransfer&&[...(e.dataTransfer.types||[])].includes('Files');
-const onList=()=>!$('#app').hidden&&$('#view').hidden&&$('#edit').hidden;
+const onList=()=>!ro&&!$('#app').hidden&&$('#view').hidden&&$('#edit').hidden;
 window.addEventListener('dragenter',e=>{if(!hasFiles(e))return;e.preventDefault();if(onList()){dragDepth++;$('#drop').hidden=false}});
 window.addEventListener('dragover',e=>{if(!hasFiles(e))return;e.preventDefault();e.dataTransfer.dropEffect=onList()?'copy':'none'});
 window.addEventListener('dragleave',e=>{if(!hasFiles(e))return;dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)$('#drop').hidden=true});

@@ -1,7 +1,9 @@
 // Family Cookbook — one shared cookbook per link (#<token>); everyone with the link can view and edit.
+// v20261122a: a separate view-only link (#<view token>): the server answers readonly:true and 403s every write;
+// here `ro` (html.ro) hides all add/edit/delete/import UI (.eo) and the edit/import entry points refuse.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261120a';
+const APPV='20261122a';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -38,6 +40,8 @@ async function api(method,path,body,raw,ms){
 
 // ---------- state ----------
 let tok='',book={name:'',recipes:[]};
+let ro=false;      // view-only link (server said readonly:true)
+function setRO(v){ro=!!v;document.documentElement.classList.toggle('ro',ro);$('#share').textContent=ro?'Share':'Share with family'}
 const st={q:'',sort:localStorage.getItem('fc-sort2')||'title',cat:'',cui:'',from:'',by:'',sel:null};  // sel = Set of ids in Select mode
 let cur=null;      // recipe id open in the view
 let ed=null;       // edit state {id, updated, photo, blob, blobUrl}
@@ -105,7 +109,7 @@ function render(){
   $('#count').textContent=filt?`${v.length} of ${n} recipe${n===1?'':'s'}`:`${n} recipe${n===1?'':'s'}`;
   $('#prall').hidden=!v.length||!!st.sel;$('#selbtn').hidden=!n||!!st.sel;
   $('#list').innerHTML=v.length?v.map(cardHtml).join(''):`<div class="empty">${n?'No matches':'No recipes yet'}`+
-    (st.q.trim()?`<button class="btn" id="qweb">Search the web for “${esc(st.q.trim())}”</button>`:'')+`</div>`;
+    (st.q.trim()&&!ro?`<button class="btn" id="qweb">Search the web for “${esc(st.q.trim())}”</button>`:'')+`</div>`;
   if($('#qweb'))$('#qweb').onclick=()=>webSearch(st.q);
   $('#qx').hidden=!st.q;
   $('#fabs').hidden=!!st.sel;$('#selbar').hidden=!st.sel;
@@ -140,12 +144,12 @@ function recipeHtml(r,pr){
     (facts?`<div class="facts">${facts}</div>`:'')+
     (ing?`<h3>Ingredients</h3><ul class="ing">${ing}</ul>`:'')+(stp?`<h3>Steps</h3><ol class="stp">${stp}</ol>`:'')+
     (r.notes?`<h3>Notes</h3><div class="notes">${linkify(r.notes)}</div>`:'')+
-    `<div class="vact"><button class="btn" id="vprint">Print</button><button class="btn pri" id="vedit2">Edit</button></div></div>`;
+    `<div class="vact"><button class="btn" id="vprint">Print</button>${ro?'':'<button class="btn pri" id="vedit2">Edit</button>'}</div></div>`;
 }
 function renderView(){
   const r=byId(cur);if(!r)return;
   $('#vtt').textContent=r.title;$('#vbody').innerHTML=recipeHtml(r);
-  $('#vprint').onclick=()=>printRecipes([r]);$('#vedit2').onclick=()=>openEdit(r.id);
+  $('#vprint').onclick=()=>printRecipes([r]);if($('#vedit2'))$('#vedit2').onclick=()=>openEdit(r.id);
 }
 
 // ---------- edit ----------
@@ -178,6 +182,7 @@ function tagAdd(k,text){
 }
 const flushTags=()=>{for(const k of Object.keys(TAGS)){const i=$('#pk-'+k+' input');if(i.value.trim()){tagAdd(k,i.value);i.value=''}}};
 function openEdit(id,pushIt=true){
+  if(ro){msg('This is a view-only link');return}
   const r=id?byId(id):{};
   ed={id:id||'',photo:'',blob:null,blobUrl:''};
   $('#ett').textContent=id?'Edit recipe':'New recipe';$('#edel').hidden=!id;
@@ -222,7 +227,7 @@ async function shrink(file){
 
 let saving=false;
 async function save(){
-  if(saving||!ed)return;
+  if(saving||!ed||ro)return;
   flushTags();
   const data={};FIELDS.forEach(k=>data[k]=$('#f-'+k).value.trim());
   data.categories=[...ed.categories];data.cuisines=[...ed.cuisines];
@@ -256,7 +261,7 @@ async function save(){
   finally{saving=false;['#esave','#esave2'].forEach(s=>{$(s).disabled=false});$('#esave').textContent='Save'}
 }
 async function del(){
-  if(!ed||!ed.id)return;
+  if(!ed||!ed.id||ro)return;
   const r=byId(ed.id);if(!confirm(`Delete “${r?r.title:'this recipe'}”?`))return;
   try{await api('DELETE',`/books/${tok}/recipes/${ed.id}`)}catch(e){if(e.status!==404){msg(e.message);return}}
   book.recipes=book.recipes.filter(x=>x.id!==ed.id);saveCache();cur=null;
@@ -280,11 +285,18 @@ function webSearch(q){q=String(q||'').trim();if(!q){msg('Type what to look for')
   window.open(webUrl(q),'_blank','noopener')}
 
 // ---------- share ----------
-const shareUrl=()=>location.origin+location.pathname+'#'+tok;
-async function share(){
-  const url=shareUrl();
-  if(navigator.share){try{await navigator.share({title:book.name||'Family Cookbook',url});return}catch(e){if(e.name==='AbortError')return}}
-  try{await navigator.clipboard.writeText(url);msg('Link copied')}catch{prompt('Copy this link',url)}
+const shareUrl=t=>location.origin+location.pathname+'#'+(t||tok);
+const ssheet=on=>{$('#ssheet').hidden=!on};
+// Editors choose: the full edit link or the view-only link. A view-only visitor can only pass on the view-only link.
+function share(){
+  if(!ro&&book.view){ssheet(true);return}
+  shareLink(tok,false);
+}
+async function shareLink(t,view){
+  ssheet(false);
+  const url=shareUrl(t),title=(book.name||'Family Cookbook')+(view?' (view only)':'');
+  if(navigator.share){try{await navigator.share({title,url});return}catch(e){if(e.name==='AbortError')return}}
+  try{await navigator.clipboard.writeText(url);msg(view?'View-only link copied':'Link copied')}catch{prompt(view?'Copy this view-only link':'Copy this link',url)}
 }
 
 // ---------- loading ----------
@@ -293,7 +305,8 @@ async function refresh(){
   const t=tok;
   try{
     const d=await api('GET','/books/'+t);if(t!==tok)return;
-    book={name:d.name,recipes:d.recipes||[]};saveCache();
+    book={name:d.name,recipes:d.recipes||[],view:d.view||'',readonly:!!d.readonly};setRO(book.readonly);saveCache();
+    if(ro&&ed){$('#edit').hidden=true;ed=null;modal()}
     if(st.sel)st.sel=new Set([...st.sel].filter(byId));
     render();
     if(cur&&!$('#view').hidden){if(byId(cur))renderView();else if(!ed){msg('This recipe was deleted');back()}}
@@ -313,7 +326,9 @@ function boot(){
   }
   if(!/^[A-Za-z0-9_-]{24,64}$/.test(h)){tok='';showStart();msg('That cookbook link didn’t work',6000);return}
   if(h!==tok){tok=h;st.q='';st.cat=st.cui=st.from=st.by='';st.sel=null;$('#q').value='';
-    try{book=JSON.parse(localStorage.getItem(cacheKey())||'null')||{name:'',recipes:[]}}catch{book={name:'',recipes:[]}}}
+    // no cache yet → start view-only until the server says otherwise (caches from before v20261122a are edit links)
+    try{book=JSON.parse(localStorage.getItem(cacheKey())||'null')||{name:'',recipes:[],readonly:true}}catch{book={name:'',recipes:[],readonly:true}}
+    setRO(book.readonly)}
   localStorage.setItem('fc-last',tok);
   $('#start').hidden=true;$('#app').hidden=false;render();refresh();
 }
@@ -322,7 +337,7 @@ window.addEventListener('hashchange',boot);
 // ---------- wiring ----------
 $('#newf').onsubmit=async e=>{e.preventDefault();const name=$('#newname').value.trim()||'Family Cookbook';
   $('#newbtn').disabled=true;
-  try{const d=await api('POST','/books',{name});book={name:d.name,recipes:[]};tok=d.token;localStorage.setItem(cacheKey(),JSON.stringify(book));location.hash=d.token}
+  try{const d=await api('POST','/books',{name});book={name:d.name,recipes:[],view:d.view||'',readonly:false};tok=d.token;localStorage.setItem(cacheKey(),JSON.stringify(book));location.hash=d.token}
   catch(e){msg(e.message)}finally{$('#newbtn').disabled=false}};
 $('#openf').onsubmit=e=>{e.preventDefault();const v=$('#openlink').value.trim(),m=v.match(/#?([A-Za-z0-9_-]{24,64})\s*$/);
   if(m)location.hash=m[1];else msg('That link didn’t work')};
@@ -343,10 +358,14 @@ $('#seldone').onclick=()=>{st.sel=null;render()};
 $('#prsel').onclick=()=>{if(st.sel&&st.sel.size)printRecipes(sorted(book.recipes.filter(r=>st.sel.has(r.id))))};
 $('#prall').onclick=()=>printRecipes(visible());
 $('#share').onclick=share;
+$('#sshedit').onclick=()=>shareLink(tok,false);
+$('#sshview').onclick=()=>book.view&&shareLink(book.view,true);
+$('#sshx').onclick=()=>ssheet(false);
+$('#ssheet').onclick=e=>{if(e.target.id==='ssheet')ssheet(false)};
 $('#wf').onsubmit=e=>{e.preventDefault();webSearch($('#wq').value)};
 $('#add').onclick=()=>openEdit('');
 $('#vback').onclick=back;
-$('#vedit').onclick=()=>cur&&openEdit(cur);
+$('#vedit').onclick=()=>cur&&!ro&&openEdit(cur);
 $('#ecancel').onclick=()=>{if(dirty()&&!confirm('Discard changes?'))return;closeEdit()};
 $('#esave').onclick=save;
 $('#ef').onsubmit=e=>{e.preventDefault();save()};

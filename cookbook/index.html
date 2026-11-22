@@ -21,6 +21,10 @@
   button,input,select,textarea{font:inherit;color:inherit}
   button{cursor:pointer}
   [hidden]{display:none!important}
+  /* view-only share link (v20261122a): no add/edit/delete/import UI */
+  html.ro .eo{display:none!important}
+  html:not(.ro) .ro-only{display:none!important}
+  .rotag{flex:0 0 auto;font-size:13px;font-weight:600;color:var(--mute);background:var(--soft);border-radius:99px;padding:4px 10px;white-space:nowrap}
   .serif{font-family:Georgia,"Iowan Old Style","Times New Roman",serif}
 
   /* start screen */
@@ -148,9 +152,10 @@
   .orow .inp{flex:1;min-width:0;min-height:48px;font-size:17px}
   .orow .btn{flex:0 0 auto;min-height:48px;padding:10px 14px;font-size:16px;white-space:nowrap}
   .empty .btn{display:block;margin:16px auto 0;font-size:16px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  #isheet{position:fixed;inset:0;z-index:30;background:rgba(42,33,27,.35);display:flex;align-items:flex-end;justify-content:center}
-  #isheet .sh{width:100%;max-width:520px;background:var(--card);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
-  #isheet h2{font:600 22px Georgia,serif;margin:0 0 4px;text-align:center}
+  #isheet,#ssheet{position:fixed;inset:0;z-index:30;background:rgba(42,33,27,.35);display:flex;align-items:flex-end;justify-content:center}
+  #ssheet p{margin:-4px 0 2px;font-size:15px;color:var(--mute);text-align:center}
+  #isheet .sh,#ssheet .sh{width:100%;max-width:520px;background:var(--card);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
+  #isheet h2,#ssheet h2{font:600 22px Georgia,serif;margin:0 0 4px;text-align:center}
   #isheet form{display:flex;flex-direction:column;gap:8px;margin-top:6px}
   #isheet label{font-size:15px;font-weight:600;color:var(--mute)}
   @media (max-width:420px){.orow{flex-direction:column}.orow .btn{width:100%}}
@@ -199,7 +204,7 @@
 
 <div id="app" hidden>
   <header>
-    <div class="hrow"><h1 id="bname">Family Cookbook</h1><button class="share" id="share">Share with family</button></div>
+    <div class="hrow"><h1 id="bname">Family Cookbook</h1><span class="rotag ro-only" id="rotag">View only</span><button class="share" id="share">Share with family</button></div>
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
       <input class="inp" id="q" type="search" placeholder="Search recipes" autocomplete="off" enterkeyhint="search">
@@ -218,24 +223,24 @@
       </select><span class="sp"></span><button class="lnk" id="selbtn">Select</button><button class="lnk" id="prall">Print all</button></div>
     <div class="count" id="count"></div>
     <div id="list"></div>
-    <section class="online" id="online">
+    <section class="online eo" id="online">
       <h2>Find a recipe online</h2>
       <form id="wf" class="orow"><input class="inp" id="wq" type="search" placeholder="e.g. harira, apple cake" autocomplete="off" enterkeyhint="search" aria-label="Search the web for a recipe"><button class="btn" id="wgo">Search the web</button></form>
       <form id="uf" class="orow" novalidate><input class="inp" id="uq" type="url" inputmode="url" placeholder="Paste a recipe link" autocomplete="off" autocapitalize="off" enterkeyhint="go" aria-label="Recipe link"><button class="btn pri" id="ugo">Import from link</button></form>
       <div class="orow"><button class="btn pri" id="ufile" style="flex:1">Import from a file or photo</button></div>
     </section>
   </main>
-  <div class="fabs" id="fabs"><button class="fab2" id="imp">Import</button><button class="fab" id="add"><b>+</b> Add recipe</button></div>
+  <div class="fabs eo" id="fabs"><button class="fab2" id="imp">Import</button><button class="fab" id="add"><b>+</b> Add recipe</button></div>
   <input type="file" id="impf" hidden multiple accept=".txt,.md,.markdown,.rtf,.docx,.pdf,.html,.htm,.json,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,text/plain,text/markdown,text/html,application/pdf,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*">
   <div class="selbar" id="selbar" hidden><span class="n" id="seln"></span><button class="pri" id="prsel">Print selected</button><button id="seldone">Done</button></div>
 </div>
 
 <section class="scr" id="view" hidden>
-  <div class="bar"><button id="vback">‹ Back</button><div class="tt" id="vtt"></div><button id="vedit">Edit</button></div>
+  <div class="bar"><button id="vback">‹ Back</button><div class="tt" id="vtt"></div><button id="vedit" class="eo">Edit</button></div>
   <div class="wrap" id="vbody"></div>
 </section>
 
-<section class="scr" id="edit" hidden>
+<section class="scr eo" id="edit" hidden>
   <div class="bar"><button id="ecancel">Cancel</button><div class="tt" id="ett"></div><button class="pri" id="esave">Save</button></div>
   <div class="wrap">
     <form class="ed" id="ef" autocomplete="off">
@@ -269,7 +274,7 @@
   </div>
 </section>
 
-<div id="isheet" hidden><div class="sh" role="dialog" aria-label="Import a recipe">
+<div id="isheet" class="eo" hidden><div class="sh" role="dialog" aria-label="Import a recipe">
   <h2>Import a recipe</h2>
   <button class="btn pri" id="ishfile">From a file or photo</button>
   <form id="ishf" novalidate><label for="ishurl">From a web page link</label>
@@ -277,11 +282,18 @@
     <button class="btn" id="ishgo">Import from link</button></form>
   <button class="lnk" id="ishx">Cancel</button>
 </div></div>
-<div id="drop" hidden><div>Drop to import</div></div>
+<div id="ssheet" class="eo" hidden><div class="sh" role="dialog" aria-label="Share this cookbook">
+  <h2>Share this cookbook</h2>
+  <button class="btn pri" id="sshedit">Share link that can add &amp; edit</button>
+  <button class="btn" id="sshview">Share view-only link</button>
+  <p>View-only: they can browse, search and print, but not change anything.</p>
+  <button class="lnk" id="sshx">Cancel</button>
+</div></div>
+<div id="drop" class="eo" hidden><div>Drop to import</div></div>
 <div id="busy" hidden><div><i></i><span id="busyt">Reading…</span></div></div>
 <div id="print"></div>
 <div id="msg" role="status"></div>
-<script src="app.js?v=20261120a"></script>
-<script src="import.js?v=20261120a"></script>
+<script src="app.js?v=20261122a"></script>
+<script src="import.js?v=20261122a"></script>
 </body>
 </html>
