@@ -9,6 +9,7 @@ const PROP = 'cpCategory';
 const OTHER = 'Other';
 const LS = { cals: 'cp.cals', cats: 'cp.cats', local: 'cp.localcat', view: 'cp.view' };
 const TOKEN_KEY = 'cp.token';
+const APPV = '20261123f';
 
 const DEFAULT_CATS = [
   { name: 'Doctor & health', color: '#d8826f', words: ['dr', 'doctor', 'appointment', 'appt', 'dentist', 'dental', 'md', 'clinic', 'pt', 'physical therapy', 'physio', 'checkup', 'check-up', 'check up', 'physical', 'mammogram', 'dermatologist', 'derm', 'eye exam', 'optometrist', 'ophthalmologist', 'cardiologist', 'hospital', 'labs', 'lab work', 'blood test', 'bloodwork', 'x-ray', 'mri', 'ultrasound', 'therapist', 'colonoscopy', 'vaccine', 'flu shot', 'pharmacy', 'orthopedist', 'podiatrist', 'hygienist', 'surgery', 'urgent care', 'nurse', 'medical'] },
@@ -519,8 +520,30 @@ function bind() {
   $('#signoutBtn').addEventListener('click', signOut);
 }
 
+/* ---------------- updates: a newer published version reloads the page past any cache ---------------- */
+async function latestVersion() {
+  try { const r = await fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }); return r.ok ? (await r.text()).trim() : null; } catch (e) { return null; }
+}
+function freshLoad(v) {
+  const u = new URL(location.href); u.searchParams.set('v', v || String(Date.now())); location.replace(u.toString());
+}
+async function checkUpdate() {
+  const v = await latestVersion();
+  if (!v || v === APPV) return;
+  if (sessionStorage.getItem('cp.updTried') === v) return;  // one forced reload per version, no loops
+  sessionStorage.setItem('cp.updTried', v); freshLoad(v);
+}
+async function refreshApp() {
+  const v = await latestVersion();
+  if (v && v !== APPV) { sessionStorage.setItem('cp.updTried', v); return freshLoad(v); }
+  if (S.token) { toast('Up to date. Reloading your calendar…'); reload(); } else freshLoad(v);
+}
+
 function init() {
   bind();
+  $('#refreshBtn').addEventListener('click', refreshApp);
+  checkUpdate();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
   $('#range').value = S.range; $('#sort').value = S.sort;
   if (restoreToken()) { showApp(); reload(); } else showSignin();
   if (window.google && google.accounts && google.accounts.oauth2) gisReady();
