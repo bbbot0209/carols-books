@@ -9,7 +9,7 @@ const PROP = 'cpCategory';
 const OTHER = 'Other';
 const LS = { cals: 'cp.cals', cats: 'cp.cats', local: 'cp.localcat', view: 'cp.view' };
 const TOKEN_KEY = 'cp.token';
-const APPV = '20261123f';
+const APPV = '20261123g';
 
 const DEFAULT_CATS = [
   { name: 'Doctor & health', color: '#d8826f', words: ['dr', 'doctor', 'appointment', 'appt', 'dentist', 'dental', 'md', 'clinic', 'pt', 'physical therapy', 'physio', 'checkup', 'check-up', 'check up', 'physical', 'mammogram', 'dermatologist', 'derm', 'eye exam', 'optometrist', 'ophthalmologist', 'cardiologist', 'hospital', 'labs', 'lab work', 'blood test', 'bloodwork', 'x-ray', 'mri', 'ultrasound', 'therapist', 'colonoscopy', 'vaccine', 'flu shot', 'pharmacy', 'orthopedist', 'podiatrist', 'hygienist', 'surgery', 'urgent care', 'nurse', 'medical'] },
@@ -133,14 +133,17 @@ async function loadCalendars() {
   } while (pt);
   items.sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || (a.summaryOverride || a.summary || '').localeCompare(b.summaryOverride || b.summary || ''));
   S.calendars = items;
-  if (!S.selected) S.selected = items.filter(c => c.primary || c.selected).map(c => c.id);
+  // no saved choice, or a saved choice that matches none of her calendars → the defaults (an empty list showed "No events")
+  if (!S.selected || !items.some(c => S.selected.includes(c.id))) S.selected = items.filter(c => c.primary || c.selected).map(c => c.id);
+  if (!S.selected.length && items.length) S.selected = [items[0].id];
 }
 async function loadEvents() {
   const now = new Date();
   const tMin = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate()).toISOString();
   const tMax = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate() + 1).toISOString();
   const cals = S.calendars.filter(c => S.selected.includes(c.id));
-  const per = await Promise.all(cals.map(async cal => {
+  const bad = [];
+  const per = await Promise.all(cals.map(async cal => { try {
     let out = [], pt = '';
     do {
       const r = await gapi('GET', '/calendars/' + enc(cal.id) + '/events?singleEvents=true&orderBy=startTime&maxResults=2500'
@@ -149,13 +152,19 @@ async function loadEvents() {
       pt = r.nextPageToken;
     } while (pt);
     return out;
-  }));
+  } catch (e) {
+    // one calendar that won't load (holidays, birthdays, a shared one) must not blank all the others
+    if (e instanceof AuthError) throw e;
+    bad.push((cal.summaryOverride || cal.summary || 'a calendar') + ' (' + e.message + ')'); return [];
+  } }));
+  if (bad.length && bad.length === cals.length) throw new Error(bad.join('; '));
   S.items = per.flat();
+  S.loadWarn = bad.length ? 'Could not load ' + bad.join('; ') : '';
 }
 async function reload() {
   S.loading = true; setStatus('Loading your calendar…'); render();
   try {
-    await loadCalendars(); await loadEvents(); setStatus('');
+    await loadCalendars(); await loadEvents(); setStatus(S.loadWarn || '');
   } catch (e) {
     if (e instanceof AuthError) return showSignin();
     setStatus('Could not load: ' + e.message);
@@ -466,7 +475,7 @@ async function closeSettings() {
   if (S.calendars.length) { S.selected = sel; save(LS.cals, sel); }
   closeDlg($('#setDlg'));
   recategorize(); render();
-  if (changed) { setStatus('Loading your calendar…'); try { await loadEvents(); setStatus(''); } catch (e) { if (e instanceof AuthError) return showSignin(); setStatus('Could not load: ' + e.message); } render(); }
+  if (changed) { setStatus('Loading your calendar…'); try { await loadEvents(); setStatus(S.loadWarn || ''); } catch (e) { if (e instanceof AuthError) return showSignin(); setStatus('Could not load: ' + e.message); } render(); }
 }
 
 /* ---------------- wire up ---------------- */
