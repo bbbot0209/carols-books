@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calendar Plus">
+<meta name="theme-color" content="#f6f1e7">
+<link rel="apple-touch-icon" href="icon.png?v=20261123a">
+<link rel="icon" href="icon.png?v=20261123a">
+<title>Calendar Plus</title>
+<style>
+  :root{--bg:#f6f1e7;--card:#fffdf8;--ink:#2b2420;--mute:#7a6f64;--line:#e3d9c9;--acc:#8c3b2e;--acc2:#2f5d50}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:19px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-bottom:calc(100px + env(safe-area-inset-bottom))}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{cursor:pointer}
+  [hidden]{display:none!important}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line)}
+  .top{display:flex;align-items:center;gap:8px}
+  h1{font:600 26px Georgia,"Times New Roman",serif;margin:0;flex:1}
+  .ib{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px 12px;font-size:16px;color:var(--acc2)}
+  .tabs{display:flex;gap:6px;margin-top:10px}
+  .tabs button{flex:1;border:1px solid var(--line);background:var(--card);padding:10px 4px;border-radius:12px;font-size:17px}
+  .tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .search{display:block;width:100%;margin-top:10px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:18px}
+  .chips{display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:2px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chips button{flex:0 0 auto;padding:8px 13px;border:1px solid var(--line);border-radius:99px;background:var(--card);font-size:16px;white-space:nowrap}
+  .chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .chips .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:1px}
+  .rangebar{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
+  .rangebar select{padding:9px 10px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:17px}
+  .custom{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .custom label{font-size:16px;color:var(--mute)}
+  .custom input{padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:17px;min-height:42px}
+  main{padding:10px 16px;max-width:900px;margin:0 auto}
+  .count{color:var(--mute);font-size:16px;margin:4px 2px 8px;display:flex;justify-content:space-between;align-items:center}
+  .count button{background:none;border:0;color:var(--acc2);font-size:16px;padding:4px 0;text-decoration:underline}
+  .day{font:600 18px Georgia,serif;margin:18px 2px 6px;color:var(--ink)}
+  .day.today{color:var(--acc)}
+  .ev{display:flex;gap:12px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--c,#999);border-radius:12px;padding:11px 13px;margin-bottom:8px}
+  .ev .tm{flex:0 0 82px;color:var(--mute);font-size:16px;padding-top:2px}
+  .ev .bd{flex:1;min-width:0}
+  .ev .t{font-weight:600;font-size:19px;overflow-wrap:anywhere}
+  .ev .loc{color:var(--mute);font-size:16px;overflow-wrap:anywhere}
+  .pill{display:inline-block;font-size:14px;padding:2px 10px;border-radius:99px;margin-top:5px;background:var(--pc,#eee);color:#2b2420}
+  .empty{text-align:center;color:var(--mute);padding:40px 10px}
+  .status{color:var(--mute);font-size:16px;margin:12px 2px}
+  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));width:64px;height:64px;border-radius:50%;border:0;background:var(--acc);color:#fff;font-size:36px;line-height:64px;box-shadow:0 4px 14px rgba(0,0,0,.2);z-index:6}
+  /* month */
+  .mhead{display:flex;align-items:center;gap:8px;margin:6px 0 10px}
+  .mhead h2{flex:1;text-align:center;margin:0;font:600 22px Georgia,serif}
+  .mhead button{border:1px solid var(--line);background:var(--card);border-radius:12px;width:48px;height:44px;font-size:22px}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .grid .wd{text-align:center;font-size:14px;color:var(--mute);padding:2px 0}
+  .cell{min-height:92px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px;text-align:left;display:flex;flex-direction:column;gap:2px;overflow:hidden}
+  .cell.out{opacity:.45}
+  .cell.today .n{background:var(--acc);color:#fff;border-radius:99px;padding:0 6px}
+  .cell.sel{outline:3px solid var(--acc2);outline-offset:-2px}
+  .cell .n{font-size:15px;font-weight:600;align-self:flex-start}
+  .cell .mt{font-size:13px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:3px solid var(--c);padding-left:3px}
+  .cell .more{font-size:12px;color:var(--mute)}
+  .cell .dots{display:none;flex-wrap:wrap;gap:3px}
+  .cell .dots i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+  @media (max-width:640px){
+    .cell{min-height:54px;align-items:center}
+    .cell .mt,.cell .more{display:none}
+    .cell .dots{display:flex;justify-content:center}
+    .cell .n{align-self:center}
+  }
+  /* sign-in */
+  #signin{max-width:460px;margin:12vh auto 0;text-align:center;padding:0 20px}
+  #signin h1{font-size:34px;margin-bottom:10px}
+  #signin p{color:var(--mute)}
+  .gbtn{display:inline-flex;align-items:center;gap:12px;padding:14px 22px;border:1px solid #c7c7c7;border-radius:99px;background:#fff;font-size:19px;font-weight:600;color:#1f1f1f;margin-top:18px}
+  .gbtn:disabled{opacity:.5}
+  .gbtn svg{width:22px;height:22px}
+  /* dialogs */
+  dialog{border:0;padding:0;margin:0;width:100%;max-width:100%;height:100%;max-height:100%;background:var(--card);color:var(--ink);overflow-y:auto;overscroll-behavior:contain}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  @media (min-width:640px){dialog{margin:auto;width:580px;height:auto;max-height:92vh;border-radius:18px}}
+  .bar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;background:var(--card);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top)) 8px 8px}
+  .bar h2{flex:1;margin:0;text-align:center;font:600 20px Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar button{flex:0 0 84px;padding:10px 6px;border:0;border-radius:10px;background:none;font-size:18px;color:var(--acc2)}
+  .bar .pri{background:var(--acc);color:#fff;font-weight:600}
+  .fb{padding:6px 16px calc(28px + env(safe-area-inset-bottom))}
+  .fb label{display:block;font-size:16px;color:var(--mute);margin:14px 0 5px}
+  .fb input:not([type=checkbox]),.fb select,.fb textarea{display:block;width:100%;min-width:0;-webkit-appearance:none;appearance:none;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:18px;background:#fff;min-height:48px}
+  .fb select{background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%237a6f64' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 12px center;padding-right:34px}
+  .fb textarea{min-height:110px}
+  .row{display:flex;gap:10px}.row>div{flex:1;min-width:0}
+  .chk{display:flex!important;align-items:center;gap:10px;color:var(--ink)!important;font-size:18px!important}
+  .chk input{width:24px;height:24px}
+  .note{font-size:15px;color:var(--mute);margin-top:6px}
+  .del{display:block;width:100%;margin-top:28px;padding:13px;border-radius:12px;border:1px solid #e3b9b4;background:#fff;color:#b3261e;font-size:18px}
+  dialog.sm{height:fit-content;max-height:85vh;margin:auto;width:calc(100% - 32px);max-width:420px;border-radius:18px;padding:20px}
+  dialog.sm h3{margin:0 0 8px;font:600 21px Georgia,serif}
+  .btns{display:flex;gap:10px;margin-top:18px}
+  .btns button{flex:1;padding:13px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:18px}
+  .btns .danger{background:#b3261e;color:#fff;border-color:#b3261e}
+  .btns .pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .calrow,.catrow{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line);font-size:18px}
+  .calrow input{width:24px;height:24px;flex:0 0 auto}
+  .sw{width:16px;height:16px;border-radius:50%;flex:0 0 auto}
+  .catblock{padding:12px 0;border-bottom:1px solid var(--line)}
+  .catblock .nm{display:flex;align-items:center;gap:10px;font-weight:600}
+  .catblock .nm button{margin-left:auto;background:none;border:0;color:#b3261e;font-size:16px}
+  .catblock textarea{min-height:70px!important;font-size:16px!important;margin-top:6px}
+  .addcat{display:flex;gap:8px;margin-top:14px}.addcat input{flex:1}
+  .addcat button{padding:0 16px;border-radius:10px;border:0;background:var(--acc2);color:#fff;font-size:17px}
+  .linkbtn{background:none;border:0;color:var(--acc2);text-decoration:underline;font-size:16px;padding:10px 0}
+  #msg{position:fixed;left:16px;right:96px;bottom:calc(28px + env(safe-area-inset-bottom));background:var(--ink);color:#fff;font-size:16px;padding:11px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:20}
+  #msg.on{opacity:.95}
+  #printArea{display:none}
+  @media print{
+    @page{margin:14mm}
+    body{background:#fff;padding:0;font-size:12pt}
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block!important}
+    #printArea h1{font:600 18pt Georgia,serif;margin:0 0 2pt}
+    #printArea .sub{color:#555;font-size:10.5pt;margin-bottom:10pt}
+    #printArea table{width:100%;border-collapse:collapse}
+    #printArea td{padding:4pt 6pt;border-bottom:1px solid #ccc;vertical-align:top;font-size:11pt}
+    #printArea td.d{white-space:nowrap;width:1%}
+    #printArea tr{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div id="signin" hidden>
+  <h1>Calendar Plus</h1>
+  <p id="signinNote">Your Google Calendar, sorted.</p>
+  <button class="gbtn" id="signinBtn" disabled>
+    <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    Sign in with Google
+  </button>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <div class="top">
+      <h1>Calendar Plus</h1>
+      <button class="ib" id="menuBtn" aria-label="Settings">Settings</button>
+    </div>
+    <div class="tabs" id="viewTabs">
+      <button data-v="list" class="on">List</button>
+      <button data-v="month">Month</button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Search" autocomplete="off" enterkeyhint="search">
+    <div class="chips" id="catChips"></div>
+    <div class="rangebar" id="rangeBar">
+      <select id="range" aria-label="Dates">
+        <option value="upcoming">Upcoming</option>
+        <option value="past">Past</option>
+        <option value="all">All dates</option>
+        <option value="custom">Choose dates</option>
+      </select>
+      <select id="sort" aria-label="Sort">
+        <option value="asc">Oldest first</option>
+        <option value="desc">Newest first</option>
+      </select>
+      <button class="ib" id="printBtn">Print</button>
+    </div>
+    <div class="custom" id="customRange" hidden>
+      <label for="from">From</label><input type="date" id="from">
+      <label for="to">To</label><input type="date" id="to">
+    </div>
+  </header>
+  <main>
+    <div class="status" id="status"></div>
+    <section id="listView">
+      <div class="count"><span id="count"></span></div>
+      <div id="list"></div>
+    </section>
+    <section id="monthView" hidden>
+      <div class="mhead"><button id="mPrev" aria-label="Previous month">‹</button><h2 id="mTitle"></h2><button id="mNext" aria-label="Next month">›</button></div>
+      <div class="grid" id="mGrid"></div>
+      <div id="mDay"></div>
+    </section>
+  </main>
+  <button class="fab" id="addBtn" aria-label="Add event">+</button>
+</div>
+
+<dialog id="evDlg">
+  <form method="dialog" id="evForm">
+    <div class="bar"><button type="button" id="evCancel">Cancel</button><h2 id="evTitle">Event</h2><button type="submit" class="pri" id="evSave">Save</button></div>
+    <div class="fb">
+      <label for="fTitle">Title</label><input id="fTitle" name="title" required autocomplete="off">
+      <label class="chk"><input type="checkbox" id="fAllDay" name="allDay"> All day</label>
+      <div class="row">
+        <div><label for="fSD">Starts</label><input type="date" id="fSD" name="sd" required></div>
+        <div class="tmf"><label for="fST">Time</label><input type="time" id="fST" name="st"></div>
+      </div>
+      <div class="row">
+        <div><label for="fED">Ends</label><input type="date" id="fED" name="ed" required></div>
+        <div class="tmf"><label for="fET">Time</label><input type="time" id="fET" name="et"></div>
+      </div>
+      <label for="fCat">Category</label><select id="fCat" name="cat"></select>
+      <div id="calWrap"><label for="fCal">Calendar</label><select id="fCal" name="cal"></select></div>
+      <label for="fLoc">Location</label><input id="fLoc" name="loc" autocomplete="off">
+      <label for="fNotes">Notes</label><textarea id="fNotes" name="notes"></textarea>
+      <div class="note" id="fNote" hidden></div>
+      <button type="button" class="del" id="evDelete" hidden>Delete event</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirmDlg" class="sm">
+  <h3 id="cTitle">Delete this event?</h3>
+  <div id="cBody" style="color:var(--mute)"></div>
+  <div class="btns"><button id="cNo">Cancel</button><button class="danger" id="cYes">Delete</button></div>
+</dialog>
+
+<dialog id="setDlg">
+  <div class="bar"><span style="flex:0 0 84px"></span><h2>Settings</h2><button class="pri" id="setDone">Done</button></div>
+  <div class="fb">
+    <h3 style="font:600 20px Georgia,serif;margin:12px 0 4px">Calendars</h3>
+    <div id="calList"></div>
+    <h3 style="font:600 20px Georgia,serif;margin:22px 0 4px">Categories</h3>
+    <div class="note">Words that sort an event into each category, separated by commas.</div>
+    <div id="catList"></div>
+    <div class="addcat"><input id="newCat" placeholder="New category" autocomplete="off"><button id="addCat">Add</button></div>
+    <button class="linkbtn" id="resetWords">Restore original words</button>
+    <h3 style="font:600 20px Georgia,serif;margin:22px 0 4px">Account</h3>
+    <button class="linkbtn" id="reloadBtn">Reload from Google</button><br>
+    <button class="linkbtn" id="signoutBtn">Sign out</button>
+  </div>
+</dialog>
+
+<div id="printArea"></div>
+<div id="msg"></div>
+
+<script src="config.js?v=20261123a"></script>
+<script src="app.js?v=20261123a"></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="window.cpGisReady&&cpGisReady()"></script>
+</body>
+</html>
