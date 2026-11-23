@@ -137,7 +137,7 @@ async function loadCalendars() {
 async function loadEvents() {
   const now = new Date();
   const tMin = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate()).toISOString();
-  const tMax = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate() + 1).toISOString();
+  const tMax = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate() + 1).toISOString();
   const cals = S.calendars.filter(c => S.selected.includes(c.id));
   const per = await Promise.all(cals.map(async cal => {
     let out = [], pt = '';
@@ -207,13 +207,14 @@ function filtered(ignoreRange) {
   const terms = q ? q.split(/\s+/) : [];
   const today = startOfDay(new Date());
   let from = null, to = null;
-  if (!ignoreRange) {
+  // a search looks through every loaded event — any date, any category (Carol 11/23)
+  if (!ignoreRange && !terms.length) {
     if (S.range === 'upcoming') from = today;
     else if (S.range === 'past') to = today;
     else if (S.range === 'custom') { if (S.from) from = parseYmd(S.from); if (S.to) to = addDays(parseYmd(S.to), 1); }
   }
   const out = S.items.filter(it => {
-    if (S.cat !== 'all' && it.cat !== S.cat) return false;
+    if (!terms.length && S.cat !== 'all' && it.cat !== S.cat) return false;
     if (from && !(it.end > from || (+it.end === +it.start && it.start >= from))) return false;
     if (to && it.start >= to) return false;
     if (terms.length) {
@@ -229,7 +230,7 @@ function filtered(ignoreRange) {
 function filterLabel() {
   const parts = [];
   parts.push(S.cat === 'all' ? 'All categories' : S.cat);
-  parts.push({ upcoming: 'Upcoming', past: 'Past', all: 'All dates', custom: 'Dates: ' + (S.from || '…') + ' to ' + (S.to || '…') }[S.range]);
+  if (S.q.trim()) parts.push('All dates'); else parts.push({ upcoming: 'Upcoming', past: 'Past', all: 'All dates', custom: 'Dates: ' + (S.from || '…') + ' to ' + (S.to || '…') }[S.range]);
   if (S.q.trim()) parts.push('“' + S.q.trim() + '”');
   return parts.join(' · ');
 }
@@ -471,7 +472,7 @@ async function closeSettings() {
 function bind() {
   $('#signinBtn').addEventListener('click', signIn);
   $('#viewTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; save(LS.view, S.view); render(); });
-  let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value; render(); }, 120); });
+  let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value; if (S.q.trim() && S.view === 'month') { S.view = 'list'; save(LS.view, S.view); document.querySelectorAll('#viewTabs button').forEach(b => b.classList.toggle('on', b.dataset.v === 'list')); } render(); }, 120); });
   $('#catChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.cat = b.dataset.cat; render(); });
   $('#range').addEventListener('change', e => {
     S.range = e.target.value; S.sort = S.range === 'past' ? 'desc' : 'asc'; $('#sort').value = S.sort;
