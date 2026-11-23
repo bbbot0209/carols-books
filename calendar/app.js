@@ -68,10 +68,17 @@ function wordRe(w) {
 }
 function autoCategory(ev, cats) {
   cats = cats || CATS;
+  // "Dr" anywhere wins (Carol 11/23). In location/notes it must be followed by a name, so "12 Oak Dr" (Drive) doesn't count.
+  if (cats.some(c => c.name === 'Doctor & health')) {
+    if (/(^|[^a-z0-9])dr\.?(?=$|[^a-z0-9])/i.test(String(ev.summary || '')) ||
+        [ev.location, ev.description].some(x => /(^|[^A-Za-z0-9])[Dd][Rr]\.?\s*[A-Z]/.test(String(x || '')))) return 'Doctor & health';
+  }
   const fields = [ev.summary, ev.location, ev.description].map(x => String(x || '').toLowerCase());
-  for (const f of fields) {
+  for (let i = 0; i < fields.length; i++) {
+    const f = fields[i];
     if (!f) continue;
-    for (const c of cats) if (c.words.some(w => w.trim() && wordRe(w).test(f))) return c.name;
+    // bare "dr" outside the title is handled above (could be "Drive")
+    for (const c of cats) if (c.words.some(w => w.trim() && !(i && /^dr\.?$/i.test(w.trim())) && wordRe(w).test(f))) return c.name;
   }
   return OTHER;
 }
