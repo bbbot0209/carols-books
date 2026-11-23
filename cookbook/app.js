@@ -3,7 +3,7 @@
 // here `ro` (html.ro) hides all add/edit/delete/import UI (.eo) and the edit/import entry points refuse.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261123a';
+const APPV='20261123b';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -61,7 +61,7 @@ const byTxt=r=>r.addedBy?'Added by '+r.addedBy:'';   // the family member who en
 const AB_KEY='fc-addedby';   // last “Added by” typed on this device
 
 // ---------- search / sort / filter ----------
-// Stock is its own ingredient (Carol 11/23): in ingredients/notes, the meat/veg words that modify a stock word
+// Stock is its own ingredient (Carol 11/23): in the ingredients, the meat/veg words that modify a stock word
 // ("vegetable or chicken stock", "low-sodium chicken broth", "chicken-stock", "stock (chicken or vegetable)",
 // "chicken bouillon", "chicken base") are bound to that phrase. A bound word only matches a query word when another
 // query word matches the phrase's stock word — so "chicken" skips them, "chicken stock" / "stock" / "broth" find them.
@@ -93,9 +93,25 @@ function stockSplit(text){
   }
   return {free,ph};
 }
+// Only real ingredients count (Carol 11/23): notes aren't searched, and optional ingredients are skipped — a line
+// marked optional ("1 tsp zest, optional", "(Optional) miso", "Optional for serving: …"), the tail of
+// "salt, pepper, and optional Aleppo pepper", and every line under an optional sub-header ("For garnish (optional):")
+// until the next sub-header. "(peels optional)" only drops the parenthetical — the apples are still required.
+const OPT=/\boptional\b/i;
+const isHead=l=>isSub(l)||(/^(for\b|optional\b)/i.test(l)&&!/\d/.test(l)&&l.length<=40&&!/[,;]/.test(l));
+function searchIngredients(s){
+  let opt=false;
+  return lines(s).map(l=>{
+    if(isHead(l)){opt=OPT.test(l);return opt?'':l}
+    if(opt)return '';
+    l=l.replace(/\(([^()]*)\)/g,(m,x)=>OPT.test(x)&&!/^\s*optional\b/i.test(x)?' ':m)
+       .replace(/[,;]?\s*\b(and|or|plus)\s+optional\b.*$/i,'');
+    return OPT.test(l)?'':l;
+  }).filter(Boolean).join('\n');
+}
 function matches(r,qw){
   if(!qw.length)return true;
-  const ing=stockSplit([r.ingredients,r.notes].join('\n'));
+  const ing=stockSplit(searchIngredients(r.ingredients));
   const ws=words([r.title,r.from,r.addedBy,...catsOf(r),...cuisOf(r)].join(' ')).concat(ing.free);
   return qw.every((q,i)=>ws.some(w=>w.startsWith(q))||
     ing.ph.some(p=>p.mods.some(m=>m.startsWith(q))&&qw.some((q2,k)=>k!==i&&p.head.startsWith(q2))));
