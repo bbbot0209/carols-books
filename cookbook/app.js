@@ -3,7 +3,7 @@
 // here `ro` (html.ro) hides all add/edit/delete/import UI (.eo) and the edit/import entry points refuse.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261122a';
+const APPV='20261123a';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');
@@ -61,10 +61,44 @@ const byTxt=r=>r.addedBy?'Added by '+r.addedBy:'';   // the family member who en
 const AB_KEY='fc-addedby';   // last “Added by” typed on this device
 
 // ---------- search / sort / filter ----------
+// Stock is its own ingredient (Carol 11/23): in ingredients/notes, the meat/veg words that modify a stock word
+// ("vegetable or chicken stock", "low-sodium chicken broth", "chicken-stock", "stock (chicken or vegetable)",
+// "chicken bouillon", "chicken base") are bound to that phrase. A bound word only matches a query word when another
+// query word matches the phrase's stock word — so "chicken" skips them, "chicken stock" / "stock" / "broth" find them.
+const STOCKW=new Set(['stock','stocks','broth','broths','bouillon','bouillons','consomme','consommes','base','bases','demi','glace','fumet','dashi']);
+const STOCKMOD=new Set(['chicken','beef','veal','vegetable','vegetables','veggie','veggies','veg','turkey','fish','seafood','shrimp','lobster','crab','clam','pork','ham','lamb','mutton','duck','goose','game','bone','bones','mushroom','mushrooms','oxtail']);
+const STOCKSKIP=new Set(['low','sodium','reduced','less','lower','no','salt','unsalted','salted','fat','free','homemade','home','made','store','bought','boxed','canned','organic','rich','light','dark','brown','white','hot','warm','cold','good','quality','rotisserie','roasted','roast','prepared','fresh','strong','concentrated']);
+function stockSplit(text){
+  const free=[],ph=[];
+  for(const line of String(text||'').split('\n')){
+    const t=fold(line).replace(/[‘’']/g,'').match(/[\p{L}\p{N}]+|[^\p{L}\p{N}]+/gu)||[];
+    const isW=i=>/^[\p{L}\p{N}]/u.test(t[i]||''),bound=new Set();
+    t.forEach((w,i)=>{
+      if(!isW(i)||!STOCKW.has(w))return;
+      const mods=[];
+      for(let j=i-1,prev='';j>=0;j--){               // back over "vegetable or chicken", "low-sodium chicken"
+        if(!isW(j)){if(/[^\s\-\/&]/.test(t[j]))break;if(/[\/&]/.test(t[j]))prev='or';continue}
+        if(STOCKMOD.has(t[j])){mods.push(t[j]);bound.add(j);prev='mod'}
+        else if(t[j]==='or'||t[j]==='and'){if(prev!=='mod')break;prev='or'}   // "chicken and stock" is two things
+        else if(STOCKSKIP.has(t[j])||STOCKW.has(t[j]))prev='skip';else break;
+      }
+      if(i+1<t.length&&!isW(i+1)&&t[i+1].includes('('))  // forward into "stock (chicken or vegetable)"
+        for(let j=i+2;j<t.length;j++){
+          if(!isW(j)){if(t[j].includes(')'))break;continue}
+          if(STOCKMOD.has(t[j])){mods.push(t[j]);bound.add(j)}else if(t[j]!=='or'&&t[j]!=='and'&&!STOCKSKIP.has(t[j]))break;
+        }
+      if(mods.length)ph.push({head:w,mods});
+    });
+    t.forEach((w,i)=>{if(isW(i)&&!bound.has(i))free.push(w)});
+  }
+  return {free,ph};
+}
 function matches(r,qw){
   if(!qw.length)return true;
-  const ws=words([r.title,r.ingredients,r.from,r.addedBy,...catsOf(r),...cuisOf(r),r.notes].join(' '));
-  return qw.every(q=>ws.some(w=>w.startsWith(q)));
+  const ing=stockSplit([r.ingredients,r.notes].join('\n'));
+  const ws=words([r.title,r.from,r.addedBy,...catsOf(r),...cuisOf(r)].join(' ')).concat(ing.free);
+  return qw.every((q,i)=>ws.some(w=>w.startsWith(q))||
+    ing.ph.some(p=>p.mods.some(m=>m.startsWith(q))&&qw.some((q2,k)=>k!==i&&p.head.startsWith(q2))));
 }
 const cmpTxt=(a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true});
 function sorted(list){
