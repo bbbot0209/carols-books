@@ -9,7 +9,7 @@ const PROP = 'cpCategory';
 const OTHER = 'Other';
 const LS = { cals: 'cp.cals', cats: 'cp.cats', local: 'cp.localcat', view: 'cp.view' };
 const TOKEN_KEY = 'cp.token';
-const APPV = '20261123g';
+const APPV = '20261123h';
 
 const DEFAULT_CATS = [
   { name: 'Doctor & health', color: '#d8826f', words: ['dr', 'doctor', 'appointment', 'appt', 'dentist', 'dental', 'md', 'clinic', 'pt', 'physical therapy', 'physio', 'checkup', 'check-up', 'check up', 'physical', 'mammogram', 'dermatologist', 'derm', 'eye exam', 'optometrist', 'ophthalmologist', 'cardiologist', 'hospital', 'labs', 'lab work', 'blood test', 'bloodwork', 'x-ray', 'mri', 'ultrasound', 'therapist', 'colonoscopy', 'vaccine', 'flu shot', 'pharmacy', 'orthopedist', 'podiatrist', 'hygienist', 'surgery', 'urgent care', 'nurse', 'medical'] },
@@ -221,6 +221,8 @@ function filtered(ignoreRange) {
   if (!ignoreRange && !terms.length) {
     if (S.range === 'upcoming') from = today;
     else if (S.range === 'past') to = today;
+    else if (S.range === 'today') { from = today; to = addDays(today, 1); }
+    else if (S.range === 'tomorrow') { from = addDays(today, 1); to = addDays(today, 2); }  // next day's summary (Carol 11/23)
     else if (S.range === 'custom') { if (S.from) from = parseYmd(S.from); if (S.to) to = addDays(parseYmd(S.to), 1); }
   }
   const out = S.items.filter(it => {
@@ -240,7 +242,7 @@ function filtered(ignoreRange) {
 function filterLabel() {
   const parts = [];
   parts.push(S.cat === 'all' ? 'All categories' : S.cat);
-  if (S.q.trim()) parts.push('All dates'); else parts.push({ upcoming: 'Upcoming', past: 'Past', all: 'All dates', custom: 'Dates: ' + (S.from || '…') + ' to ' + (S.to || '…') }[S.range]);
+  if (S.q.trim()) parts.push('All dates'); else parts.push({ upcoming: 'Upcoming', today: 'Today', tomorrow: 'Tomorrow', past: 'Past', all: 'All dates', custom: 'Dates: ' + (S.from || '…') + ' to ' + (S.to || '…') }[S.range]);
   if (S.q.trim()) parts.push('“' + S.q.trim() + '”');
   return parts.join(' · ');
 }
