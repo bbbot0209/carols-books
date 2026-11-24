@@ -9,12 +9,12 @@ const PROP = 'cpCategory';
 const OTHER = 'Other';
 const LS = { cals: 'cp.cals', cats: 'cp.cats', local: 'cp.localcat', view: 'cp.view' };
 const TOKEN_KEY = 'cp.token';
-const APPV = '20261124a';
+const APPV = '20261124b';
 
 const DEFAULT_CATS = [
   { name: 'Birthdays', color: '#e07b9b', words: ['birthday', 'bday', 'b-day', 'b\'day'] },
   { name: 'Doctor & health', color: '#d8826f', words: ['dr', 'doctor', 'appointment', 'appt', 'dentist', 'dental', 'md', 'clinic', 'pt', 'physical therapy', 'physio', 'checkup', 'check-up', 'check up', 'physical', 'mammogram', 'dermatologist', 'derm', 'eye exam', 'optometrist', 'ophthalmologist', 'cardiologist', 'hospital', 'labs', 'lab work', 'blood test', 'bloodwork', 'x-ray', 'mri', 'ultrasound', 'therapist', 'colonoscopy', 'vaccine', 'flu shot', 'pharmacy', 'orthopedist', 'podiatrist', 'hygienist', 'surgery', 'urgent care', 'nurse', 'medical'] },
-  { name: 'Exercise', color: '#6fae8c', words: ['gym', 'yoga', 'pilates', 'swim', 'swimming', 'walk', 'walking', 'hike', 'tennis', 'pickleball', 'golf', 'class', 'workout', 'exercise', 'fitness', 'spin', 'cycling', 'bike', 'run', 'running', 'barre', 'trainer', 'training', 'zumba', 'stretch', 'stretching', 'aqua', 'tai chi', 'weights'] },
+  { name: 'Activities', color: '#6fae8c', words: ['gym', 'yoga', 'pilates', 'swim', 'swimming', 'walk', 'walking', 'hike', 'tennis', 'pickleball', 'golf', 'class', 'workout', 'exercise', 'fitness', 'spin', 'cycling', 'bike', 'run', 'running', 'barre', 'trainer', 'training', 'zumba', 'stretch', 'stretching', 'aqua', 'tai chi', 'weights'] },
   { name: 'Holidays', color: '#d9a441', words: ['holiday', 'thanksgiving', 'christmas', 'xmas', 'christmas eve', 'hanukkah', 'chanukah', 'passover', 'seder', 'easter', 'rosh hashanah', 'yom kippur', 'sukkot', 'purim', 'new year\'s', 'new years', 'new year’s', 'independence day', 'fourth of july', '4th of july', 'memorial day', 'labor day', 'mlk day', 'martin luther king', 'presidents day', 'presidents\' day', 'veterans day', 'columbus day', 'indigenous peoples', 'juneteenth', 'halloween', 'valentine', 'valentine\'s day', 'mother\'s day', 'mother’s day', 'mothers day', 'father\'s day', 'father’s day', 'fathers day', 'kwanzaa', 'diwali', 'ramadan', 'eid', 'lunar new year', 'good friday', 'st. patrick', 'election day'] },
   { name: 'Meetings', color: '#5b8fc7', words: ['meeting', 'mtg', 'reception', 'faculty', 'board', 'committee', 'conference', 'council', 'trustees', 'seminar', 'webinar', 'zoom', 'luncheon', 'town hall', 'staff', 'department', 'dept'] },
   { name: 'Reminders', color: '#7aa6a1', words: ['reminder', 'remind', 'renew', 'renewal', 'due', 'deadline', 'pay', 'bill', 'expires', 'expiration', 'to do', 'todo', 'rsvp'] },
@@ -23,7 +23,7 @@ const DEFAULT_CATS = [
 const EXTRA_COLORS = ['#d9a441', '#5b9bd5', '#c46fa0', '#7aa6a1', '#b5835a', '#9b9b4f', '#e07b9b', '#6c8ebf'];
 const OTHER_COLOR = '#a8a29a';
 // renamed categories: old name (still stored on events / in settings) -> new name
-const RENAMED = { 'Performances & shows': 'Shows' };
+const RENAMED = { 'Performances & shows': 'Shows', 'Exercise': 'Activities' };
 const canon = n => RENAMED[n] || n;
 
 const $ = (s, r = document) => r.querySelector(s);
