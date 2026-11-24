@@ -9,7 +9,7 @@ const PROP = 'cpCategory';
 const OTHER = 'Other';
 const LS = { cals: 'cp.cals', cats: 'cp.cats', local: 'cp.localcat', view: 'cp.view' };
 const TOKEN_KEY = 'cp.token';
-const APPV = '20261123h';
+const APPV = '20261123i';
 
 const DEFAULT_CATS = [
   { name: 'Doctor & health', color: '#d8826f', words: ['dr', 'doctor', 'appointment', 'appt', 'dentist', 'dental', 'md', 'clinic', 'pt', 'physical therapy', 'physio', 'checkup', 'check-up', 'check up', 'physical', 'mammogram', 'dermatologist', 'derm', 'eye exam', 'optometrist', 'ophthalmologist', 'cardiologist', 'hospital', 'labs', 'lab work', 'blood test', 'bloodwork', 'x-ray', 'mri', 'ultrasound', 'therapist', 'colonoscopy', 'vaccine', 'flu shot', 'pharmacy', 'orthopedist', 'podiatrist', 'hygienist', 'surgery', 'urgent care', 'nurse', 'medical'] },
@@ -94,6 +94,7 @@ function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDat
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 const fmtDay = d => d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 const fmtTime = d => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+const fmtDate = d => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
 function normalize(cal, ev) {
   const allDay = !!(ev.start && ev.start.date);
@@ -212,19 +213,25 @@ function showSignin() { $('#app').hidden = true; $('#signin').hidden = false; }
 function showApp() { $('#signin').hidden = true; $('#app').hidden = false; }
 
 /* ---------------- filtering ---------------- */
+// the chosen date range as [from, to) — null = open-ended
+function rangeBounds() {
+  const today = startOfDay(new Date());
+  let from = null, to = null;
+  if (S.range === 'upcoming') from = today;
+  else if (S.range === 'past') to = today;
+  else if (S.range === 'today') { from = today; to = addDays(today, 1); }
+  else if (S.range === 'tomorrow') { from = addDays(today, 1); to = addDays(today, 2); }  // next day's summary (Carol 11/23)
+  else if (S.range === 'week') { from = addDays(today, -today.getDay()); to = addDays(from, 7); }  // Sun–Sat containing today
+  else if (S.range === 'next7') { from = today; to = addDays(today, 7); }  // today + 6 days
+  else if (S.range === 'custom') { if (S.from) from = parseYmd(S.from); if (S.to) to = addDays(parseYmd(S.to), 1); }
+  return { from, to };
+}
 function filtered(ignoreRange) {
   const q = S.q.trim().toLowerCase();
   const terms = q ? q.split(/\s+/) : [];
-  const today = startOfDay(new Date());
   let from = null, to = null;
   // a search looks through every loaded event — any date, any category (Carol 11/23)
-  if (!ignoreRange && !terms.length) {
-    if (S.range === 'upcoming') from = today;
-    else if (S.range === 'past') to = today;
-    else if (S.range === 'today') { from = today; to = addDays(today, 1); }
-    else if (S.range === 'tomorrow') { from = addDays(today, 1); to = addDays(today, 2); }  // next day's summary (Carol 11/23)
-    else if (S.range === 'custom') { if (S.from) from = parseYmd(S.from); if (S.to) to = addDays(parseYmd(S.to), 1); }
-  }
+  if (!ignoreRange && !terms.length) ({ from, to } = rangeBounds());
   const out = S.items.filter(it => {
     if (!terms.length && S.cat !== 'all' && it.cat !== S.cat) return false;
     if (from && !(it.end > from || (+it.end === +it.start && it.start >= from))) return false;
@@ -239,12 +246,19 @@ function filtered(ignoreRange) {
   out.sort((a, b) => dir * (a.start - b.start || a.title.localeCompare(b.title)));
   return out;
 }
+// e.g. "Doctor & health — Nov 23, 2026 to Feb 28, 2027" (print header)
+function rangeLabel() {
+  if (S.q.trim() || S.range === 'all') return 'All dates';
+  const { from, to } = rangeBounds();
+  const last = to && addDays(to, -1);
+  if (from && last) return +from === +last ? fmtDate(from) : fmtDate(from) + ' to ' + fmtDate(last);
+  if (from) return (S.range === 'upcoming' ? 'Upcoming from ' : 'From ') + fmtDate(from);
+  if (last) return S.range === 'past' ? 'Before ' + fmtDate(to) : 'Through ' + fmtDate(last);
+  return 'All dates';
+}
 function filterLabel() {
-  const parts = [];
-  parts.push(S.cat === 'all' ? 'All categories' : S.cat);
-  if (S.q.trim()) parts.push('All dates'); else parts.push({ upcoming: 'Upcoming', today: 'Today', tomorrow: 'Tomorrow', past: 'Past', all: 'All dates', custom: 'Dates: ' + (S.from || '…') + ' to ' + (S.to || '…') }[S.range]);
-  if (S.q.trim()) parts.push('“' + S.q.trim() + '”');
-  return parts.join(' · ');
+  if (S.q.trim()) return 'Search “' + S.q.trim() + '” — All dates';
+  return (S.cat === 'all' ? 'All categories' : S.cat) + ' — ' + rangeLabel();
 }
 
 /* ---------------- render ---------------- */
@@ -264,12 +278,48 @@ function timeLabel(it, day) {
   if (day && startOfDay(it.start) < startOfDay(day)) return 'cont.';
   return fmtTime(it.start);
 }
+/* location → a link: a web address (Zoom etc.) opens itself, anything else opens Google Maps */
+function locHref(loc) {
+  loc = String(loc || '').trim(); if (!loc) return '';
+  const m = loc.match(/\bhttps?:\/\/[^\s<>"']+/i) || loc.match(/(^|\s)(www\.[^\s<>"']+)/i);
+  if (m) return m[2] ? 'https://' + m[2] : m[0];
+  return 'https://www.google.com/maps/search/?api=1&query=' + enc(loc);
+}
+function locLink(loc, cls) {
+  const h = locHref(loc); if (!h) return '';
+  return '<a class="' + cls + '" href="' + esc(h) + '" target="_blank" rel="noopener">' + esc(String(loc).trim()) + '</a>';
+}
+
+/* overlaps: timed events whose times cross another timed event (all-day events don't count) */
+const overlapsOf = (a, b) => a.start < b.end && b.start < a.end;
+function sameEvent(a, b) { return a.ev.id === b.ev.id || (a.ev.iCalUID && a.ev.iCalUID === b.ev.iCalUID && +a.start === +b.start); }
+let OVL = new Map();
+function computeOverlaps() {
+  const timed = S.items.filter(it => !it.allDay && it.end > it.start).sort((a, b) => a.start - b.start);
+  const out = new Map();
+  for (let i = 0; i < timed.length; i++) {
+    const a = timed[i];
+    for (let j = i + 1; j < timed.length && timed[j].start < a.end; j++) {
+      const b = timed[j];
+      if (sameEvent(a, b)) continue;  // one event on two calendars
+      if (!out.has(a.key)) out.set(a.key, []); if (!out.has(b.key)) out.set(b.key, []);
+      out.get(a.key).push(b); out.get(b.key).push(a);
+    }
+  }
+  OVL = out;
+}
+function conflictsFor(start, end, skipKey) {
+  return S.items.filter(it => !it.allDay && it.key !== skipKey && it.end > it.start && overlapsOf({ start, end }, it))
+    .sort((a, b) => a.start - b.start);
+}
 function evRow(it, day) {
   const c = catColor(it.cat);
-  return '<button class="ev" data-key="' + esc(it.key) + '" style="--c:' + c + '">' +
+  const ov = OVL.get(it.key);
+  return '<div class="ev" role="button" tabindex="0" data-key="' + esc(it.key) + '" style="--c:' + c + '">' +
     '<span class="tm">' + esc(timeLabel(it, day)) + '</span><span class="bd"><span class="t">' + esc(it.title) + '</span>' +
-    (it.ev.location ? '<div class="loc">' + esc(it.ev.location) + '</div>' : '') +
-    '<span class="pill" style="--pc:' + c + '40">' + esc(it.cat) + '</span></span></button>';
+    (it.ev.location ? '<div class="loc">' + locLink(it.ev.location, 'loclink') + '</div>' : '') +
+    (ov ? '<div class="ovl"><span aria-hidden="true">⚠</span> Overlaps with ' + esc(ov.map(x => x.title).join(', ')) + '</div>' : '') +
+    '<span class="pill" style="--pc:' + c + '40">' + esc(it.cat) + '</span></span></div>';
 }
 function renderList() {
   const items = filtered();
@@ -318,10 +368,12 @@ function renderMonth() {
   } else $('#mDay').innerHTML = '';
 }
 function renderPrint() {
+  // prints exactly what's filtered: category chip + date range (incl. chosen dates) or the search
   const items = filtered();
-  $('#printArea').innerHTML = '<h1>Calendar Plus</h1><div class="sub">' + esc(filterLabel()) + ' · ' + items.length + (items.length === 1 ? ' event' : ' events') + ' · printed ' + esc(fmtDay(new Date())) + '</div>' +
-    '<table>' + items.map(it => '<tr><td class="d">' + esc(fmtDay(it.start)) + '<br>' + esc(it.allDay ? 'All day' : fmtTime(it.start)) + '</td><td><b>' + esc(it.title) + '</b>' +
-      (it.ev.location ? '<br>' + esc(it.ev.location) : '') + '</td><td>' + esc(it.cat) + '</td></tr>').join('') + '</table>';
+  const oneCat = S.cat !== 'all' && !S.q.trim();
+  $('#printArea').innerHTML = '<h1>' + esc(filterLabel()) + '</h1><div class="sub">Calendar Plus · ' + items.length + (items.length === 1 ? ' event' : ' events') + ' · printed ' + esc(fmtDay(new Date())) + '</div>' +
+    (items.length ? '<table>' + items.map(it => '<tr><td class="d">' + esc(fmtDay(it.start)) + '<br>' + esc(it.allDay ? 'All day' : fmtTime(it.start) + ' – ' + fmtTime(it.end)) + '</td><td><b>' + esc(it.title) + '</b>' +
+      (it.ev.location ? '<br>' + esc(it.ev.location) : '') + '</td>' + (oneCat ? '' : '<td>' + esc(it.cat) + '</td>') + '</tr>').join('') + '</table>' : '<p>No events</p>');
 }
 function render() {
   document.querySelectorAll('#viewTabs button').forEach(b => b.classList.toggle('on', b.dataset.v === S.view));
@@ -331,6 +383,7 @@ function render() {
   $('#range').hidden = $('#sort').hidden = S.view === 'month';
   $('#customRange').hidden = !(S.range === 'custom' && S.view === 'list');
   renderChips();
+  computeOverlaps();
   if (S.view === 'list') renderList(); else renderMonth();
   renderPrint();
 }
@@ -338,6 +391,21 @@ function render() {
 /* ---------------- dialogs ---------------- */
 function openDlg(d) { if (!d.open) d.showModal(); }
 function closeDlg(d) { if (d.open) d.close(); }
+/* small question box (confirmDlg): resolves with the chosen button's value, or null on Cancel/Escape */
+let chooseDone = null;
+function choose(title, body, buttons) {
+  if (chooseDone) chooseDone(null);
+  const d = $('#confirmDlg');
+  $('#cTitle').textContent = title; $('#cBody').textContent = body || '';
+  $('#cBtns').className = 'btns' + (buttons.length > 2 ? ' stack' : '');
+  $('#cBtns').innerHTML = buttons.map((b, i) => '<button type="button" id="' + b.id + '" data-i="' + i + '"' + (b.cls ? ' class="' + b.cls + '"' : '') + '>' + esc(b.label) + '</button>').join('');
+  return new Promise(res => {
+    chooseDone = v => { chooseDone = null; closeDlg(d); res(v); };
+    $('#cBtns').onclick = e => { const b = e.target.closest('[data-i]'); if (b && chooseDone) chooseDone(buttons[+b.dataset.i].value); };
+    d.oncancel = e => { e.preventDefault(); if (chooseDone) chooseDone(null); };
+    openDlg(d);
+  });
+}
 function writableCals() { return S.calendars.filter(c => (c.accessRole === 'owner' || c.accessRole === 'writer')); }
 function calName(c) { return c.summaryOverride || c.summary || c.id; }
 
@@ -345,6 +413,11 @@ function fillCatSelect(sel, current, autoName) {
   sel.innerHTML = '<option value="">Automatic' + (autoName ? ' (' + esc(autoName) + ')' : '') + '</option>' +
     allCats().map(c => '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>').join('');
   sel.value = current || '';
+}
+function syncLocLink() {
+  const v = $('#fLoc').value.trim(), a = $('#fLocLink'), h = locHref(v);
+  a.hidden = !h; if (!h) return;
+  a.href = h; a.textContent = h.indexOf('https://www.google.com/maps/') === 0 ? 'Open in Google Maps' : 'Open link';
 }
 function syncAllDay() { document.querySelectorAll('.tmf').forEach(x => { x.hidden = $('#fAllDay').checked; }); }
 
@@ -367,7 +440,7 @@ function openEditor(it, presetDay) {
     fillCatSelect($('#fCat'), manual, autoCategory(it.ev));
     const notes = [];
     if (ro) notes.push('This calendar is view-only. Category saves on this device only.');
-    if (it.ev.recurringEventId) notes.push('Repeating event: changes apply to this date only.');
+    if (it.ev.recurringEventId && it.canEdit) notes.push('Repeating event.');
     if (notes.length) { $('#fNote').textContent = notes.join(' '); $('#fNote').hidden = false; }
   } else {
     const d = presetDay ? parseYmd(presetDay) : new Date();
@@ -379,7 +452,7 @@ function openEditor(it, presetDay) {
     $('#fCal').innerHTML = cals.map(c => '<option value="' + esc(c.id) + '">' + esc(calName(c)) + '</option>').join('');
     const prim = cals.find(c => c.primary); if (prim) $('#fCal').value = prim.id;
   }
-  syncAllDay();
+  syncAllDay(); syncLocLink();
   openDlg($('#evDlg'));
   if (!it) setTimeout(() => $('#fTitle').focus(), 50);
 }
@@ -398,19 +471,48 @@ function buildTimes() {
   return { start: { dateTime: ymd(s) + 'T' + hm(s) + ':00', timeZone: z }, end: { dateTime: ymd(e) + 'T' + hm(e) + ':00', timeZone: z } };
 }
 
+function timesChanged(it, t) {
+  if (!!t.start.date !== it.allDay) return true;
+  if (t.start.date) return t.start.date !== ymd(it.start) || t.end.date !== ymd(it.end);
+  return +new Date(t.start.dateTime) !== +it.start || +new Date(t.end.dateTime) !== +it.end;
+}
 async function saveEditor(ev) {
   ev.preventDefault();
   const it = S.editing;
   const cat = $('#fCat').value;
   const title = $('#fTitle').value.trim();
   if (!title && !(it && !it.canEdit)) { toast('Add a title.'); $('#fTitle').focus(); return; }
+  const editable = !(it && !it.canEdit);
+  const t = editable ? buildTimes() : null;
+  let scope = 'one';
+  if (editable && !t.start.date && (!it || timesChanged(it, t))) {
+    // warn before double-booking (new events, or when the time was changed)
+    const s = new Date(t.start.dateTime), e = new Date(t.end.dateTime);
+    const hits = conflictsFor(s, e, it && it.key);
+    if (hits.length) {
+      const h = hits[0];
+      const go = await choose('Time overlap', 'This overlaps ' + h.title + ' at ' + fmtTime(h.start) + (hits.length > 1 ? ' and ' + (hits.length - 1) + ' more' : '') + '. Save anyway?',
+        [{ id: 'cNo', label: 'Cancel', value: null }, { id: 'cYes', label: 'Save anyway', value: 'yes', cls: 'pri' }]);
+      if (!go) return;
+    }
+  }
+  if (editable && it && it.ev.recurringEventId) {
+    scope = await choose('Change which dates?', it.title, [
+      { id: 'cOne', label: 'This date only', value: 'one', cls: 'pri' },
+      { id: 'cAll', label: 'All dates in the series', value: 'all', cls: 'pri' },
+      { id: 'cNo', label: 'Cancel', value: null }]);
+    if (!scope) return;
+  }
   const btn = $('#evSave'); btn.disabled = true;
   try {
-    if (it && !it.canEdit) {
+    if (!editable) {
       const local = load(LS.local, {}); if (cat) local[it.key] = cat; else delete local[it.key]; save(LS.local, local);
       replaceItem(it.cal, it.ev);
+    } else if (scope === 'all') {
+      const note = await saveSeries(it, title, cat, t);
+      closeDlg($('#evDlg')); toast('Saved for all dates.' + (note ? ' ' + note : ''));
+      await reload(); return;
     } else {
-      const t = buildTimes();
       if (it) {
         const body = Object.assign({}, it.ev, { summary: title, location: $('#fLoc').value, description: $('#fNotes').value, start: t.start, end: t.end });
         const ext = Object.assign({}, it.ev.extendedProperties || {});
@@ -435,6 +537,33 @@ async function saveEditor(ev) {
     toast('Could not save: ' + e.message);
   } finally { btn.disabled = false; }
 }
+/* whole repeating series: PATCH the master event. Title/location/notes/category always; a changed time of day
+   moves every date to that time (the series keeps its own days). Returns a short note when something wasn't applied. */
+async function saveSeries(it, title, cat, t) {
+  const path = '/calendars/' + enc(it.cal.id) + '/events/' + enc(it.ev.recurringEventId);
+  const master = await gapi('GET', path);
+  const body = { summary: title, location: $('#fLoc').value, description: $('#fNotes').value };
+  const ext = Object.assign({}, master.extendedProperties || {});
+  const priv = Object.assign({}, ext.private || {});
+  if (cat || priv[PROP]) { priv[PROP] = cat; ext.private = priv; body.extendedProperties = ext; }
+  let note = '';
+  if (timesChanged(it, t)) {
+    const masterAllDay = !!(master.start && master.start.date);
+    if (!!t.start.date !== it.allDay || masterAllDay !== it.allDay) note = 'Times were not changed for the series.';
+    else if (t.start.date) note = 'The series keeps its days.';
+    else {
+      const ns = new Date(t.start.dateTime), ne = new Date(t.end.dateTime);
+      const s = startOfDay(new Date(master.start.dateTime)); s.setHours(ns.getHours(), ns.getMinutes());
+      const e = new Date(s.getTime() + (ne - ns));
+      const z = tz();
+      body.start = { dateTime: ymd(s) + 'T' + hm(s) + ':00', timeZone: z };
+      body.end = { dateTime: ymd(e) + 'T' + hm(e) + ':00', timeZone: z };
+      if (ymd(ns) !== ymd(it.start)) note = 'The series keeps its days.';
+    }
+  }
+  await gapi('PATCH', path, body);
+  return note;
+}
 function replaceItem(cal, ev) {
   const key = cal.id + '|' + ev.id;
   const i = S.items.findIndex(x => x.key === key);
@@ -442,17 +571,25 @@ function replaceItem(cal, ev) {
   if (i >= 0) S.items[i] = n; else S.items.push(n);
 }
 
-function askDelete() {
+async function askDelete() {
   const it = S.editing; if (!it) return;
-  $('#cBody').textContent = it.title + ' — ' + fmtDay(it.start) + (it.allDay ? '' : ', ' + fmtTime(it.start));
-  openDlg($('#confirmDlg'));
+  const body = it.title + ' — ' + fmtDay(it.start) + (it.allDay ? '' : ', ' + fmtTime(it.start));
+  const scope = it.ev.recurringEventId
+    ? await choose('Delete which dates?', body, [
+        { id: 'cOne', label: 'This date only', value: 'one', cls: 'danger' },
+        { id: 'cAll', label: 'All dates in the series', value: 'all', cls: 'danger' },
+        { id: 'cNo', label: 'Cancel', value: null }])
+    : await choose('Delete this event?', body, [{ id: 'cNo', label: 'Cancel', value: null }, { id: 'cYes', label: 'Delete', value: 'one', cls: 'danger' }]);
+  if (scope) doDelete(it, scope);
 }
-async function doDelete() {
-  const it = S.editing; closeDlg($('#confirmDlg')); if (!it) return;
+async function doDelete(it, scope) {
   try {
-    await gapi('DELETE', '/calendars/' + enc(it.cal.id) + '/events/' + enc(it.ev.id));
+    const all = scope === 'all';
+    await gapi('DELETE', '/calendars/' + enc(it.cal.id) + '/events/' + enc(all ? it.ev.recurringEventId : it.ev.id));
+    closeDlg($('#evDlg'));
+    if (all) { toast('Deleted all dates'); await reload(); return; }
     S.items = S.items.filter(x => x.key !== it.key);
-    closeDlg($('#evDlg')); toast('Deleted'); render();
+    toast('Deleted'); render();
   } catch (e) {
     if (e instanceof AuthError) { closeDlg($('#evDlg')); return showSignin(); }
     toast('Could not delete: ' + e.message);
@@ -499,8 +636,13 @@ function bind() {
   $('#mNext').addEventListener('click', () => { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + 1, 1); render(); });
   $('#mGrid').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (!b) return; S.selDay = S.selDay === b.dataset.day ? null : b.dataset.day; render(); });
   document.addEventListener('click', e => {
+    if (e.target.closest('a')) return;  // location link opens Maps, not the editor
     const b = e.target.closest('.ev[data-key]'); if (!b) return;
     const it = S.items.find(x => x.key === b.dataset.key); if (it) openEditor(it);
+  });
+  document.addEventListener('keydown', e => {
+    if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.matches || !e.target.matches('.ev[data-key]')) return;
+    e.preventDefault(); e.target.click();
   });
   $('#addBtn').addEventListener('click', () => openEditor(null, S.view === 'month' ? S.selDay : null));
   $('#fAllDay').addEventListener('change', syncAllDay);
@@ -508,8 +650,7 @@ function bind() {
   $('#evForm').addEventListener('submit', saveEditor);
   $('#evCancel').addEventListener('click', () => closeDlg($('#evDlg')));
   $('#evDelete').addEventListener('click', askDelete);
-  $('#cNo').addEventListener('click', () => closeDlg($('#confirmDlg')));
-  $('#cYes').addEventListener('click', doDelete);
+  $('#fLoc').addEventListener('input', syncLocLink);
   $('#menuBtn').addEventListener('click', openSettings);
   $('#setDone').addEventListener('click', closeSettings);
   $('#setDlg').addEventListener('cancel', e => { e.preventDefault(); closeSettings(); });
@@ -560,6 +701,6 @@ function init() {
   if (window.google && google.accounts && google.accounts.oauth2) gisReady();
   else if (!(window.CP_CONFIG || {}).clientId) gisReady();
 }
-window.CalendarPlus = { autoCategory, DEFAULT_CATS, state: S };
+window.CalendarPlus = { autoCategory, locHref, DEFAULT_CATS, state: S };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
