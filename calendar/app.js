@@ -9,11 +9,13 @@ const PROP = 'cpCategory';
 const OTHER = 'Other';
 const LS = { cals: 'cp.cals', cats: 'cp.cats', local: 'cp.localcat', view: 'cp.view' };
 const TOKEN_KEY = 'cp.token';
-const APPV = '20261123i';
+const APPV = '20261123j';
 
 const DEFAULT_CATS = [
+  { name: 'Birthdays', color: '#e07b9b', words: ['birthday', 'bday', 'b-day', 'b\'day'] },
   { name: 'Doctor & health', color: '#d8826f', words: ['dr', 'doctor', 'appointment', 'appt', 'dentist', 'dental', 'md', 'clinic', 'pt', 'physical therapy', 'physio', 'checkup', 'check-up', 'check up', 'physical', 'mammogram', 'dermatologist', 'derm', 'eye exam', 'optometrist', 'ophthalmologist', 'cardiologist', 'hospital', 'labs', 'lab work', 'blood test', 'bloodwork', 'x-ray', 'mri', 'ultrasound', 'therapist', 'colonoscopy', 'vaccine', 'flu shot', 'pharmacy', 'orthopedist', 'podiatrist', 'hygienist', 'surgery', 'urgent care', 'nurse', 'medical'] },
   { name: 'Exercise', color: '#6fae8c', words: ['gym', 'yoga', 'pilates', 'swim', 'swimming', 'walk', 'walking', 'hike', 'tennis', 'pickleball', 'golf', 'class', 'workout', 'exercise', 'fitness', 'spin', 'cycling', 'bike', 'run', 'running', 'barre', 'trainer', 'training', 'zumba', 'stretch', 'stretching', 'aqua', 'tai chi', 'weights'] },
+  { name: 'Holidays', color: '#d9a441', words: ['holiday', 'thanksgiving', 'christmas', 'xmas', 'christmas eve', 'hanukkah', 'chanukah', 'passover', 'seder', 'easter', 'rosh hashanah', 'yom kippur', 'sukkot', 'purim', 'new year\'s', 'new years', 'new year’s', 'independence day', 'fourth of july', '4th of july', 'memorial day', 'labor day', 'mlk day', 'martin luther king', 'presidents day', 'presidents\' day', 'veterans day', 'columbus day', 'indigenous peoples', 'juneteenth', 'halloween', 'valentine', 'valentine\'s day', 'mother\'s day', 'mother’s day', 'mothers day', 'father\'s day', 'father’s day', 'fathers day', 'kwanzaa', 'diwali', 'ramadan', 'eid', 'lunar new year', 'good friday', 'st. patrick', 'election day'] },
   { name: 'Meetings', color: '#5b8fc7', words: ['meeting', 'mtg', 'reception', 'faculty', 'board', 'committee', 'conference', 'council', 'trustees', 'seminar', 'webinar', 'zoom', 'luncheon', 'town hall', 'staff', 'department', 'dept'] },
   { name: 'Performances & shows', color: '#8c7bc4', words: ['concert', 'theater', 'theatre', 'opera', 'ballet', 'symphony', 'philharmonic', 'orchestra', 'show', 'performance', 'tickets', 'ticket', 'matinee', 'museum', 'broadway', 'musical', 'recital', 'gallery', 'exhibit', 'exhibition', 'jazz', 'movie', 'film', 'cinema', 'festival', 'carnegie', 'lincoln center', 'met opera', 'play'] },
 ];
@@ -67,6 +69,13 @@ function wordRe(w) {
   }
   return reCache.get(w);
 }
+// Google's own Birthdays / Holidays calendars sort straight into those categories.
+function calCategory(cal, ev) {
+  const id = String((cal && cal.id) || '');
+  if ((ev && ev.eventType === 'birthday') || id.startsWith('addressbook#contacts@')) return 'Birthdays';
+  if (id.includes('#holiday@')) return 'Holidays';
+  return '';
+}
 function autoCategory(ev, cats) {
   cats = cats || CATS;
   // "Dr" anywhere wins (Carol 11/23). In location/notes it must be followed by a name, so "12 Oak Dr" (Drive) doesn't count.
@@ -107,7 +116,7 @@ function normalize(cal, ev) {
   return {
     key: cal.id + '|' + ev.id, cal, ev, allDay, start, end,
     lastDay: allDay ? addDays(end, -1) : end,
-    title: ev.summary || '(No title)', cat: manual || autoCategory(ev), catSource: manual ? 'manual' : 'auto', canEdit,
+    title: ev.summary || '(No title)', cat: manual || calCategory(cal, ev) || autoCategory(ev), catSource: manual ? 'manual' : 'auto', canEdit,
   };
 }
 function recategorize() { S.items = S.items.map(it => normalize(it.cal, it.ev)); }
@@ -701,6 +710,6 @@ function init() {
   if (window.google && google.accounts && google.accounts.oauth2) gisReady();
   else if (!(window.CP_CONFIG || {}).clientId) gisReady();
 }
-window.CalendarPlus = { autoCategory, locHref, DEFAULT_CATS, state: S };
+window.CalendarPlus = { autoCategory, calCategory, locHref, DEFAULT_CATS, state: S };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
