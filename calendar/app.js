@@ -9,7 +9,7 @@ const PROP = 'cpCategory';
 const OTHER = 'Other';
 const LS = { cals: 'cp.cals', cats: 'cp.cats', local: 'cp.localcat', view: 'cp.view' };
 const TOKEN_KEY = 'cp.token';
-const APPV = '20261123j';
+const APPV = '20261124a';
 
 const DEFAULT_CATS = [
   { name: 'Birthdays', color: '#e07b9b', words: ['birthday', 'bday', 'b-day', 'b\'day'] },
@@ -17,10 +17,14 @@ const DEFAULT_CATS = [
   { name: 'Exercise', color: '#6fae8c', words: ['gym', 'yoga', 'pilates', 'swim', 'swimming', 'walk', 'walking', 'hike', 'tennis', 'pickleball', 'golf', 'class', 'workout', 'exercise', 'fitness', 'spin', 'cycling', 'bike', 'run', 'running', 'barre', 'trainer', 'training', 'zumba', 'stretch', 'stretching', 'aqua', 'tai chi', 'weights'] },
   { name: 'Holidays', color: '#d9a441', words: ['holiday', 'thanksgiving', 'christmas', 'xmas', 'christmas eve', 'hanukkah', 'chanukah', 'passover', 'seder', 'easter', 'rosh hashanah', 'yom kippur', 'sukkot', 'purim', 'new year\'s', 'new years', 'new year’s', 'independence day', 'fourth of july', '4th of july', 'memorial day', 'labor day', 'mlk day', 'martin luther king', 'presidents day', 'presidents\' day', 'veterans day', 'columbus day', 'indigenous peoples', 'juneteenth', 'halloween', 'valentine', 'valentine\'s day', 'mother\'s day', 'mother’s day', 'mothers day', 'father\'s day', 'father’s day', 'fathers day', 'kwanzaa', 'diwali', 'ramadan', 'eid', 'lunar new year', 'good friday', 'st. patrick', 'election day'] },
   { name: 'Meetings', color: '#5b8fc7', words: ['meeting', 'mtg', 'reception', 'faculty', 'board', 'committee', 'conference', 'council', 'trustees', 'seminar', 'webinar', 'zoom', 'luncheon', 'town hall', 'staff', 'department', 'dept'] },
-  { name: 'Performances & shows', color: '#8c7bc4', words: ['concert', 'theater', 'theatre', 'opera', 'ballet', 'symphony', 'philharmonic', 'orchestra', 'show', 'performance', 'tickets', 'ticket', 'matinee', 'museum', 'broadway', 'musical', 'recital', 'gallery', 'exhibit', 'exhibition', 'jazz', 'movie', 'film', 'cinema', 'festival', 'carnegie', 'lincoln center', 'met opera', 'play'] },
+  { name: 'Reminders', color: '#7aa6a1', words: ['reminder', 'remind', 'renew', 'renewal', 'due', 'deadline', 'pay', 'bill', 'expires', 'expiration', 'to do', 'todo', 'rsvp'] },
+  { name: 'Shows', color: '#8c7bc4', words: ['concert', 'theater', 'theatre', 'opera', 'ballet', 'symphony', 'philharmonic', 'orchestra', 'show', 'performance', 'tickets', 'ticket', 'matinee', 'museum', 'broadway', 'musical', 'recital', 'gallery', 'exhibit', 'exhibition', 'jazz', 'movie', 'film', 'cinema', 'festival', 'carnegie', 'lincoln center', 'met opera', 'play'] },
 ];
 const EXTRA_COLORS = ['#d9a441', '#5b9bd5', '#c46fa0', '#7aa6a1', '#b5835a', '#9b9b4f', '#e07b9b', '#6c8ebf'];
 const OTHER_COLOR = '#a8a29a';
+// renamed categories: old name (still stored on events / in settings) -> new name
+const RENAMED = { 'Performances & shows': 'Shows' };
+const canon = n => RENAMED[n] || n;
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -38,7 +42,7 @@ function catConfig() {
   const c = load(LS.cats, null) || {};
   const words = c.words || {};
   const custom = c.custom || [];
-  const list = DEFAULT_CATS.map(d => ({ name: d.name, color: d.color, words: words[d.name] || d.words.slice(), builtin: true }));
+  const list = DEFAULT_CATS.map(d => ({ name: d.name, color: d.color, words: words[d.name] || words[Object.keys(RENAMED).find(k => RENAMED[k] === d.name)] || d.words.slice(), builtin: true }));
   custom.forEach((n, i) => { if (!list.some(x => x.name === n)) list.push({ name: n, color: EXTRA_COLORS[i % EXTRA_COLORS.length], words: words[n] || [], builtin: false }); });
   return list;
 }
@@ -111,7 +115,7 @@ function normalize(cal, ev) {
   const end = ev.end ? (allDay ? parseYmd(ev.end.date) : new Date(ev.end.dateTime)) : start;
   const priv = (ev.extendedProperties && ev.extendedProperties.private) || {};
   const local = load(LS.local, {})[cal.id + '|' + ev.id];
-  const manual = priv[PROP] || local || '';
+  const manual = canon(priv[PROP] || local || '');
   const canEdit = cal.accessRole === 'owner' || cal.accessRole === 'writer';
   return {
     key: cal.id + '|' + ev.id, cal, ev, allDay, start, end,
