@@ -3,7 +3,7 @@
 // here `ro` (html.ro) hides all add/edit/delete/import UI (.eo) and the edit/import entry points refuse.
 // Server: projects/family-cookbook/server/server.py behind Tailscale Funnel /cookbook-api.
 'use strict';
-const APPV='20261123b';
+const APPV='20261125a';
 const DEFAULT_API='https://bbs-mac-mini.tail532c1c.ts.net/cookbook-api';
 // Tests point the page at a local server with ?api=http://127.0.0.1:<port> (localhost only; ?api=default clears).
 const API=(()=>{const u=new URLSearchParams(location.search).get('api');

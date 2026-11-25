@@ -44,6 +44,7 @@ const FRAC='½¼¾⅓⅔⅛⅜⅝⅞';
 const UNIT='(?:cups?|c\\.|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|t\\.|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|quarts?|qt|pints?|pt|gallons?|cans?|cloves?|sticks?|slices?|pinch(?:es)?|dash(?:es)?|packages?|pkgs?|envelopes?|bunch(?:es)?|heads?|large|medium|small|whole|handful)';
 const QTY_RE=new RegExp(`^(?:\\d+(?:[./]\\d+)?(?:\\s*-\\s*\\d+)?|[${FRAC}]|\\d+\\s*[${FRAC}]|(?:a|one|two|three|four|five|six|half)\\s+${UNIT}\\b)\\s*(?:${UNIT}\\b|[a-z]|\\()`,'i');
 const isQty=l=>QTY_RE.test(l.replace(BULLET_RE,''))&&!/^\s*\d{1,2}\s*[.)]\s/.test(l)&&l.length<=120
+  &&!/^\s*\d+(?:[.,\/]\d+)?(?:\s*[-–]\s*\d+)?\s*(?:min(?:ute)?s?|hrs?|hours?|secs?|seconds?)\b/i.test(l)   // "10 minutes, then Quick" is a time
   ||/^(?:salt|pepper|salt and pepper|salt & pepper)\b/i.test(l.replace(BULLET_RE,''))&&l.length<40;
 const clean=l=>l.replace(BULLET_RE,'').replace(NUM_RE,'').trim();
 const capWord=w=>w[0].toUpperCase()+w.slice(1).toLowerCase();
@@ -132,7 +133,8 @@ function parseText(text,fallbackTitle=''){
       else if(kind==='from'){if(!r.from)r.from=v}
     }
   };
-  for(const glued of raw.split('\n')){
+  for(let glued of raw.split('\n')){
+    glued=glued.replace(/\u2063(?=[,.;:!?)])/g,'').replace(/\{([^{}()\n]*)\)/g,'($1)');
     const rawLine=glued.replace(/\u2063/g,' ');
     const l=rawLine.replace(/[ \t]+/g,' ').trim();
     if(!l){if(meta)meta.blank=true;sec[main].push('');continue}
@@ -167,10 +169,18 @@ function parseText(text,fallbackTitle=''){
   if(/\p{Lu}{3}/u.test(r.title)&&r.title===r.title.toUpperCase())r.title=r.title.toLowerCase().replace(/(^|[\s(-])(\p{L})/gu,(m,a,c)=>a+c.toUpperCase());   // MANDEL BREAD → Mandel Bread
   let intro=pre;
   if(!sawMain){   // no Ingredients/Steps headers anywhere → guess from the body
-    const body=nb(intro);
-    if(body.some(isQty)){sec.ing=body.filter(isQty);sec.stp=body.filter(l=>!isQty(l));intro=[]}
+    const body=nb(intro),num=l=>/^\s*(?:step\s*)?\d{1,2}\s*[.)]\s/i.test(l);
+    const n0=body.findIndex(num),q0=body.findIndex(isQty);
+    if(n0>0&&q0>=0&&q0<n0&&body.filter(num).length>=2){
+      // v20261125a: ingredient lines, then numbered steps (book page without headers): the text before the first
+      // ingredient is the intro, the run up to the last ingredient before the steps is the ingredient list, the rest are steps
+      let q1=n0-1;while(!isQty(body[q1]))q1--;
+      sec.ing=body.slice(q0,q1+1);sec.stp=body.slice(q1+1);intro=body.slice(0,q0);
+      // a scanned "1." read as "I." / "l." / "|." when the next numbered step is 2
+      if(/^\s*2\s*[.)]/.test(body[n0])&&!num(sec.stp[0]))sec.stp[0]=sec.stp[0].replace(/^\s*[Il|]\s*[.)]\s+/,'1. ');
+    }else if(body.some(isQty)){sec.ing=body.filter(isQty);sec.stp=body.filter(l=>!isQty(l));intro=[]}
   }
-  r.ingredients=joinWrapped(nb(sec.ing)).map(clean).filter(Boolean).join('\n');
+  r.ingredients=joinWrapped(nb(sec.ing)).map(clean).map(l=>l.replace(new RegExp(`^(\\d+(?:[${FRAC}]|\\/\\d+)?)(?=${UNIT}\\b)`,'i'),'$1 ')).filter(Boolean).join('\n');
   r.steps=joinWrapped(nb(sec.stp)).map(clean).filter(Boolean).join('\n');
   const tidy=a=>a.join('\n').replace(/\n{3,}/g,'\n\n').trim();
   r.notes=foldExtras([tidy(intro),tidy(sec.notes)].filter(Boolean).join('\n\n'),tidy(sec.modifications),tidy(sec.special));
@@ -271,7 +281,7 @@ const normRun=t=>t.replace(/[ \t]+/g,' ').replace(/^[\s\u2063]+|[\s\u2063]+$/g,'
 function pdfRows(items){
   const its=[];
   for(const it of items){
-    if(!it.str||!it.transform)continue;
+    if(!it.str||!it.transform||/^\s*[®™©℠]+\s*$/.test(it.str))continue;   // lone ® / ™ superscripts ("Instant Pot®") split rows
     const t=it.transform,size=Math.hypot(t[2],t[3])||it.height||10;
     its.push({s:it.str,x:t[4],y:t[5],w:it.width||0,size,ws:!it.str.trim()});
   }
@@ -312,36 +322,50 @@ function pdfRows(items){
   return out;
 }
 // Two-column blocks: ≥3 rows sharing an empty vertical gutter with text on both sides → left column, then right.
-function pdfColumns(rows){
+// v20261125a: a run that pdf.js merged across a narrow gutter is split at its item gap, and each column is checked
+// again for a two-column block of its own (cookbook scans: a meta sidebar beside a column that holds a two-column
+// ingredient list over numbered steps). Every column gets its own id (r.col) so pdfLines can read its line spacing.
+let colSeq=0;
+function pdfColumns(rows,depth=0){
   const out=[];let i=0;
   const part=(r,segs)=>({...r,segs,x0:segs[0].x0,x1:segs[segs.length-1].x1});
+  // a row's runs against gutter (na,nb): a run straddling it is cut at an item gap inside the gutter, else null
+  const fit=(r,na,nb)=>{const segs=[];
+    for(const sg of r.segs){
+      if(sg.x1<=nb-1||sg.x0>=na+1){segs.push(sg);continue}
+      const c=(sg.cuts||[]).find(c=>c.px1<=nb-1&&c.x>=na+1&&c.px1>sg.x0&&c.x<sg.x1),sp=c&&cutAt(sg,c);
+      if(!sp)return null;segs.push(...sp);
+    }
+    return segs};
   while(i<rows.length){
     let reg=null;
     for(let g=0;g<rows[i].segs.length-1&&!reg;g++){
-      let ga=rows[i].segs[g].x1,gb=rows[i].segs[g+1].x0,j=i,both=0;
+      let ga=rows[i].segs[g].x1,gb=rows[i].segs[g+1].x0,j=i,both=0;const split={};
       for(;j<rows.length;j++){
         const r=rows[j];
         if(j>i&&rows[j-1].y-r.y>3.5*Math.max(r.size,rows[j-1].size))break;
+        const segs=fit(r,ga,gb);if(!segs)break;
         let na=ga,nb=gb,L=0,R=0,ok=true;
-        for(const sg of r.segs){
+        for(const sg of segs){
           if(sg.x1<=nb-1){na=Math.max(na,sg.x1);L++}
           else if(sg.x0>=na+1){nb=Math.min(nb,sg.x0);R++}
           else{ok=false;break}
         }
         if(!ok||nb-na<0.8*r.size)break;
+        if(segs.length!==r.segs.length)split[j]=segs;
         ga=na;gb=nb;if(L&&R)both++;
       }
-      if(both>=3)reg={j,mid:(ga+gb)/2};
+      if(both>=3)reg={j,mid:(ga+gb)/2,split};
     }
     if(!reg){out.push(rows[i++]);continue}
-    const left=[],right=[];
+    let left=[],right=[];
     for(let k=i;k<reg.j;k++){
-      const r=rows[k],l=r.segs.filter(sg=>sg.x1<=reg.mid),rt=r.segs.filter(sg=>sg.x1>reg.mid);
+      const r=rows[k],segs=reg.split[k]||r.segs,l=segs.filter(sg=>sg.x1<=reg.mid),rt=segs.filter(sg=>sg.x1>reg.mid);
       if(l.length)left.push(part(r,l));if(rt.length)right.push(part(r,rt));
     }
-    const colR=a=>Math.max(...a.map(r=>r.x1));
-    if(left.length){const cr=colR(left);left.forEach(r=>r.colR=cr)}
-    if(right.length){const cr=colR(right);right.forEach(r=>r.colR=cr)}
+    const mark=a=>{if(!a.length)return a;const cr=Math.max(...a.map(r=>r.x1)),id=++colSeq;a.forEach(r=>{r.colR=cr;r.col=id});
+      return depth<2&&a.length>=3?pdfColumns(a,depth+1):a};
+    left=mark(left);right=mark(right);
     if(left.length&&right.length)right[0].gapBefore=true;
     out.push(...left,...right);i=reg.j;
   }
@@ -355,14 +379,14 @@ function pdfColumns(rows){
 const SECT=new Set(['ing','stp','special','modifications','notes']);
 const bareSect=t=>{if(t.length>40)return false;const h=header(t);return !!(h&&SECT.has(h.kind)&&!h.rest)};
 function cutSeg(sg,x,tol){   // split a merged run at the first item gap at/after x
-  for(const c of sg.cuts||[]){
-    if(c.x<x-tol)continue;
-    const a=normRun(sg.raw.slice(0,c.at)),b=normRun(sg.raw.slice(c.at));
-    if(!a||!b)return null;
-    return [{x0:sg.x0,x1:c.px1,t:a,raw:sg.raw.slice(0,c.at),size:sg.size,cuts:sg.cuts.filter(d=>d.at<c.at)},
-            {x0:c.x,x1:sg.x1,t:b,raw:sg.raw.slice(c.at),size:sg.size,cuts:sg.cuts.filter(d=>d.at>c.at).map(d=>({...d,at:d.at-c.at}))}];
-  }
+  for(const c of sg.cuts||[])if(c.x>=x-tol)return cutAt(sg,c);
   return null;
+}
+function cutAt(sg,c){   // split a merged run at item gap c
+  const a=normRun(sg.raw.slice(0,c.at)),b=normRun(sg.raw.slice(c.at));
+  if(!a||!b)return null;
+  return [{x0:sg.x0,x1:c.px1,t:a,raw:sg.raw.slice(0,c.at),size:sg.size,cuts:sg.cuts.filter(d=>d.at<c.at)},
+          {x0:c.x,x1:sg.x1,t:b,raw:sg.raw.slice(c.at),size:sg.size,cuts:sg.cuts.filter(d=>d.at>c.at).map(d=>({...d,at:d.at-c.at}))}];
 }
 // one row → its runs per column, or null when a run spans a column boundary / sits left of its column
 function colSplit(r,cx,min){
@@ -434,8 +458,8 @@ function flatCols(seq){
   const out=[];
   for(const x of seq){
     if(!x.cols){out.push(x);continue}
-    x.cols.filter(c=>c.length).forEach((c,k)=>{const cr=Math.max(...c.map(r=>r.x1));
-      c.forEach((r,j)=>{r.colR=cr;r.gapBefore=k>0&&j===0;out.push(r)})});
+    x.cols.filter(c=>c.length).forEach((c,k)=>{const cr=Math.max(...c.map(r=>r.x1)),id=++colSeq;
+      c.forEach((r,j)=>{r.colR=cr;r.col=id;r.gapBefore=k>0&&j===0;out.push(r)})});
   }
   return out;
 }
@@ -457,6 +481,14 @@ function pdfLines(rows){
   const one=rs.filter(r=>r.segs.length===1),x1s=one.map(r=>r.x1).sort((a,b)=>b-a);
   const left=Math.min(...rs.map(r=>r.x0)),rmax=x1s[0]||0;
   const margin=x1s.length>=3&&rmax-x1s[2]<=1.5*(one[0]||{size:12}).size?rmax:null;
+  // v20261125a: a column whose rows come in two spacings (tight lines inside an item, a wider gap between items —
+  // book ingredient lists where an item wraps onto a second line) → rows closer than the midpoint continue the item.
+  const tight={},gaps={};
+  for(let k=1;k<rs.length;k++){const a=rs[k-1],b=rs[k];if(a.col&&a.col===b.col&&!b.gapBefore&&a.y>b.y)(gaps[a.col]=gaps[a.col]||[]).push(a.y-b.y)}
+  for(const [c,g] of Object.entries(gaps)){
+    const lo=Math.min(...g),hi=Math.max(...g),mid=(lo+hi)/2,big=g.filter(d=>d>mid).length;
+    if(g.length>=4&&hi>=1.3*lo&&big>=2&&big>=0.6*(g.length-big))tight[c]=mid;
+  }
   const lines=[];let prev=null;
   for(const r0 of rs){
     let t=r0.segs.map(sg=>sg.t).join('   ').replace(/^[\u0000�]+\s*[.)]?\s*/,'• ').replace(/[\u0000�]/g,'');
@@ -468,7 +500,11 @@ function pdfLines(rows){
       const colL=prev.colR?prev.x0:left,colR=prev.colR||margin||rmax;
       const lower=/^[a-z]/.test(bt)&&!/[.!?:]$/.test(pt)&&(prev.x1-colL)>=0.75*(colR-colL);
       if(!r.gapBefore&&prev.segs.length===1&&r.segs.length===1&&dy>0&&dy<=1.7*em&&r.x0>=prev.x0-2&&r.x0<=prev.x0+3*em
-         &&!/:$/.test(pt)&&!MARK_RE.test(bt)&&!header(pt)&&!header(bt)&&(full||lower)){
+         &&!/:$/.test(pt)&&!MARK_RE.test(bt)&&!(h=>h&&!(SECT.has(h.kind)&&h.rest.split(' ').length>=3))(header(pt))&&!header(bt)&&(full||lower)){
+        prev.t+=' '+r.t;prev.x1=r.x1;prev.y=r.y;continue;
+      }
+      if(!r.gapBefore&&r.col&&r.col===prev.col&&tight[r.col]&&dy>0&&dy<tight[r.col]&&prev.segs.length===1&&r.segs.length===1
+         &&Math.abs(r.x0-prev.x0)<=2*em&&!/[:.!?]$/.test(pt)&&!MARK_RE.test(bt)&&!header(pt)&&!header(bt)&&!isQty(bt)){
         prev.t+=' '+r.t;prev.x1=r.x1;prev.y=r.y;continue;
       }
       if(r.gapBefore||dy>1.8*em||dy<0)lines.push('');
